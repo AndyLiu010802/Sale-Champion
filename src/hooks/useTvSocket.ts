@@ -24,6 +24,24 @@ const BACKOFF_MAX_MS = 30_000;
 
 type RegisterResponse = { data: { screenId: string; pairCode: string; expiresAt: string } };
 
+// localStorage can throw (privacy mode, disabled storage, quota) — fall back to an
+// in-memory map so pairing still works for the current session; it just won't
+// survive a reload in that case.
+const memoryStore = new Map<string, string>();
+const safeStorage = {
+  get(key: string): string | null {
+    try { return localStorage.getItem(key); } catch { return memoryStore.get(key) ?? null; }
+  },
+  set(key: string, value: string): void {
+    try { localStorage.setItem(key, value); } catch { /* fall through */ }
+    memoryStore.set(key, value);
+  },
+  remove(key: string): void {
+    try { localStorage.removeItem(key); } catch { /* fall through */ }
+    memoryStore.delete(key);
+  },
+};
+
 export function useTvSocket(handlers: TvSocketHandlers): TvSocketState {
   const [state, setState] = useState<TvSocketState>({ phase: 'connecting', pairCode: null, screen: null });
 
@@ -38,6 +56,10 @@ export function useTvSocket(handlers: TvSocketHandlers): TvSocketState {
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let pingTimer: ReturnType<typeof setInterval> | null = null;
     let expiryTimer: ReturnType<typeof setTimeout> | null = null;
+    // Timestamp of the last message received on the current connection (any server
+    // event counts as alive, not just pong). Used by the ping loop to detect a
+    // half-open socket that never errors/closes on its own.
+    let lastServerMessageAt = Date.now();
 
     const wsUrl = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
@@ -51,6 +73,9 @@ export function useTvSocket(handlers: TvSocketHandlers): TvSocketState {
 
     /** Close the current socket without triggering its onclose reconnect logic. */
     const dropSocket = () => {
+      // Defensive cleanup: every path that tears down the current connection should
+      // also cancel any pending reconnect so we never end up with two scheduled.
+      if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       if (ws) {
         ws.onclose = null;
         ws.onmessage = null;
@@ -70,10 +95,12 @@ export function useTvSocket(handlers: TvSocketHandlers): TvSocketState {
     };
 
     const handleEvent = (event: ServerEvent) => {
+      // Any message from the server — not just pong — proves the connection is alive.
+      lastServerMessageAt = Date.now();
       switch (event.type) {
         case 'paired':
-          localStorage.setItem(TOKEN_KEY, event.deviceToken);
-          localStorage.setItem(NAME_KEY, event.screen.name);
+          safeStorage.set(TOKEN_KEY, event.deviceToken);
+          safeStorage.set(NAME_KEY, event.screen.name);
           clearExpiry();
           setState({ phase: 'paired', pairCode: null, screen: event.screen });
           handlersRef.current.onPaired(event.screen);
@@ -88,13 +115,13 @@ export function useTvSocket(handlers: TvSocketHandlers): TvSocketState {
           handlersRef.current.onConfigUpdated();
           break;
         case 'screen.updated':
-          localStorage.setItem(NAME_KEY, event.screen.name);
+          safeStorage.set(NAME_KEY, event.screen.name);
           setState((s) => ({ ...s, screen: event.screen }));
           break;
         case 'screen.unpaired':
           // Admin unpaired this TV: forget the token and go get a fresh pair code.
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(NAME_KEY);
+          safeStorage.remove(TOKEN_KEY);
+          safeStorage.remove(NAME_KEY);
           handlersRef.current.onUnpaired();
           dropSocket();
           clearExpiry();
@@ -107,6 +134,20 @@ export function useTvSocket(handlers: TvSocketHandlers): TvSocketState {
       }
     };
 
+    /** Shared "connection is gone" handling for both a real close and a watchdog-detected half-open socket. */
+    const handleDisconnect = () => {
+      stopPing();
+      const token = safeStorage.get(TOKEN_KEY);
+      if (token) {
+        setState((s) => ({ ...s, phase: 'offline' }));
+        scheduleRetry(connect);
+      } else {
+        clearExpiry();
+        setState({ phase: 'connecting', pairCode: null, screen: null });
+        scheduleRetry(() => void register());
+      }
+    };
+
     const openSocket = (hello: Record<string, unknown>, phaseOnOpen: TvPhase) => {
       dropSocket();
       const socket = new WebSocket(wsUrl());
@@ -114,10 +155,21 @@ export function useTvSocket(handlers: TvSocketHandlers): TvSocketState {
       socket.onopen = () => {
         if (stopped) return;
         attempts = 0;
+        lastServerMessageAt = Date.now();
         socket.send(JSON.stringify({ type: 'hello', ...hello }));
         setState((s) => ({ ...s, phase: phaseOnOpen }));
         pingTimer = setInterval(() => {
-          if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ping' }));
+          if (socket.readyState !== WebSocket.OPEN) return;
+          // Half-open connection: the socket looks OPEN but nothing has arrived in
+          // over two ping intervals (plus slack) — the server side is presumably
+          // gone without a close frame ever reaching us. Force a reconnect instead
+          // of waiting indefinitely.
+          if (Date.now() - lastServerMessageAt > PING_INTERVAL_MS * 2 + 5_000) {
+            dropSocket();
+            handleDisconnect();
+            return;
+          }
+          socket.send(JSON.stringify({ type: 'ping' }));
         }, PING_INTERVAL_MS);
       };
       socket.onmessage = (ev) => {
@@ -134,16 +186,7 @@ export function useTvSocket(handlers: TvSocketHandlers): TvSocketState {
       socket.onclose = () => {
         if (stopped || ws !== socket) return;
         ws = null;
-        stopPing();
-        const token = localStorage.getItem(TOKEN_KEY);
-        if (token) {
-          setState((s) => ({ ...s, phase: 'offline' }));
-          scheduleRetry(connect);
-        } else {
-          clearExpiry();
-          setState({ phase: 'connecting', pairCode: null, screen: null });
-          scheduleRetry(() => void register());
-        }
+        handleDisconnect();
       };
     };
 
@@ -173,7 +216,7 @@ export function useTvSocket(handlers: TvSocketHandlers): TvSocketState {
 
     function connect(): void {
       if (stopped) return;
-      const token = localStorage.getItem(TOKEN_KEY);
+      const token = safeStorage.get(TOKEN_KEY);
       if (!token) {
         void register();
         return;
