@@ -36,6 +36,11 @@ function createHub(): Hub {
 
   return {
     register(screenId, socket, paired) {
+      const prevScreenId = bySocket.get(socket);
+      if (prevScreenId !== undefined && prevScreenId !== screenId) {
+        const prevEntry = byScreen.get(prevScreenId);
+        if (prevEntry && prevEntry.socket === socket) byScreen.delete(prevScreenId);
+      }
       const existing = byScreen.get(screenId);
       if (existing && existing.socket !== socket) {
         bySocket.delete(existing.socket);

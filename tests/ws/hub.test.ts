@@ -79,6 +79,33 @@ describe('hub', () => {
     expect(hub.isOnline('s1')).toBe(true);
   });
 
+  it('re-registering the same socket under a new screenId evicts the old screenId', () => {
+    const hub = getHub();
+    const sock = fakeSocket();
+    hub.register('A', sock.socket, true);
+    hub.register('B', sock.socket, true);
+    expect(hub.isOnline('A')).toBe(false);
+    expect(hub.isOnline('B')).toBe(true);
+    expect(hub.onlineScreenIds()).toEqual(['B']);
+    hub.unregister(sock.socket);
+    expect(hub.isOnline('A')).toBe(false);
+    expect(hub.isOnline('B')).toBe(false);
+  });
+
+  it('broadcast keeps delivering to healthy sockets when one throws mid-iteration', () => {
+    const hub = getHub();
+    const good1 = fakeSocket();
+    const bad = throwingSocket();
+    const good2 = fakeSocket();
+    hub.register('s1', good1.socket, true);
+    hub.register('s2', bad, true);
+    hub.register('s3', good2.socket, true);
+    hub.broadcast(CONFIG);
+    expect(good1.sent).toEqual([JSON.stringify(CONFIG)]);
+    expect(good2.sent).toEqual([JSON.stringify(CONFIG)]);
+    expect(hub.isOnline('s2')).toBe(false);
+  });
+
   it('unregister removes the screen', () => {
     const hub = getHub();
     const tv = fakeSocket();
