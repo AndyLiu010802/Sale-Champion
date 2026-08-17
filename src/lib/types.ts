@@ -1,3 +1,5 @@
+import type { SettingsData } from './settings';
+
 export const METRICS = ['sales_count', 'gci', 'listings'] as const;
 export type Metric = (typeof METRICS)[number];
 
@@ -29,3 +31,13 @@ export type TvListing = {
 export type TvAnnouncement = { id: string; title: string; body: string | null; imageUrl: string | null };
 
 export type TvScreenInfo = { id: string; name: string };
+
+export type TvStateResponse = {
+  screen: TvScreenInfo;
+  settings: SettingsData;
+  leaderboards: Record<Metric, LeaderboardEntry[]>;  // all three metrics
+  goals: GoalProgress[];                              // active only
+  listings: TvListing[];                              // status='active', listedDate desc, limit 8
+  announcements: TvAnnouncement[];                    // enabled only, sortOrder asc
+  periodLabel: string;                                // periodLabel(settings.leaderboardPeriod, now)
+};
