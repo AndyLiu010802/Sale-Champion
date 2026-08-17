@@ -2,7 +2,7 @@ node_modules/
 .next/
 out/
 .data/
-storage/
+/storage/
 next-env.d.ts
 *.tsbuildinfo
 .env
