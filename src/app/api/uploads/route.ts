@@ -41,7 +41,8 @@ export async function POST(req: Request) {
   try {
     const stored = await getStorage().save(buf, file.name, CONTENT_TYPES[ext]);
     return Response.json({ data: { url: stored.url } });
-  } catch {
+  } catch (err) {
+    console.error('[uploads] storage write failed:', err);
     return Response.json({ error: 'Failed to store file' }, { status: 500 });
   }
 }

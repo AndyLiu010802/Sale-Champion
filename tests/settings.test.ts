@@ -67,7 +67,7 @@ describe('/api/settings', () => {
     const res1 = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: missingKey }));
     expect(res1.status).toBe(400);
 
-    // Duplicate key (7 entries, first key repeated, one key missing overall).
+    // Duplicate key (7 entries: all six keys present plus the first key repeated).
     const duplicateKey = { ...DEFAULT_SETTINGS, slides: [DEFAULT_SETTINGS.slides[0], ...DEFAULT_SETTINGS.slides] };
     const res2 = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: duplicateKey }));
     expect(res2.status).toBe(400);

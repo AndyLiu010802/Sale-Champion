@@ -60,6 +60,7 @@ export default function TvApp() {
       if (seq !== requestSeq.current) return; // a newer refresh has since started; drop this one
       if (!res.ok) return;
       const json = (await res.json()) as { data: TvStateResponse };
+      if (seq !== requestSeq.current) return; // re-check: a newer refresh may have started while awaiting res.json()
       setTvState(json.data);
       const nextSlides = json.data.settings.slides
         .filter((s) => s.enabled)
@@ -121,6 +122,7 @@ export default function TvApp() {
   const handleCelebrationDone = useCallback(() => dispatch({ type: 'celebrationDone' }), []);
 
   const handleStart = useCallback(() => {
+    audioUnlockedRef.current = true;
     setAudioUnlocked(true);
     // Flush anything that arrived while audio was still locked, in original order;
     // the reducer's existing FIFO queue takes it from here.

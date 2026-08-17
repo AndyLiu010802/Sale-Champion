@@ -47,7 +47,8 @@ export async function GET(req: Request): Promise<Response> {
   };
 
   const goalRows = await db.select().from(goals)
-    .where(and(eq(goals.orgId, orgId), eq(goals.active, true)));
+    .where(and(eq(goals.orgId, orgId), eq(goals.active, true)))
+    .orderBy(asc(goals.createdAt));
   const goalProgress: GoalProgress[] = goalRows.map((g) => {
     const metric = g.metric as Metric;
     const period = g.period as 'month' | 'quarter';

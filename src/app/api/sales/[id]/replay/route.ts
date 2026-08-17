@@ -18,6 +18,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     .from(sales)
     .where(and(eq(sales.id, id), eq(sales.orgId, orgId)));
   if (!sale) return Response.json({ error: 'Not found' }, { status: 404 });
+  // Intentionally no active filter: replay re-broadcasts a historical fact, it does not
+  // create a new agent-sale association.
   const [agent] = await db
     .select()
     .from(agents)

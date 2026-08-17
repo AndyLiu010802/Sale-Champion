@@ -57,7 +57,11 @@ export async function getSettings(db: Db, orgId: string): Promise<SettingsData> 
   const rows = await db.select().from(settings).where(eq(settings.orgId, orgId)).limit(1);
   if (!rows[0]) return DEFAULT_SETTINGS;
   const parsed = settingsSchema.safeParse(rows[0].data);
-  return parsed.success ? parsed.data : DEFAULT_SETTINGS;
+  if (!parsed.success) {
+    console.warn('[settings] stored settings failed validation, falling back to defaults');
+    return DEFAULT_SETTINGS;
+  }
+  return parsed.data;
 }
 
 export async function saveSettings(db: Db, orgId: string, data: SettingsData): Promise<void> {

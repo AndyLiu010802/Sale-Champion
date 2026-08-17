@@ -38,6 +38,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     .from(sales)
     .where(and(eq(sales.id, id), eq(sales.orgId, orgId)));
   if (!existing) return Response.json({ error: 'Not found' }, { status: 404 });
+  if (Object.keys(parsed.data).length === 0) return Response.json({ data: existing });
   if (parsed.data.agentId !== undefined) {
     const [agent] = await db
       .select()
