@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTvSocket } from '@/hooks/useTvSocket';
 import { carouselReducer, initCarousel, type CarouselSlide } from '@/lib/carousel';
+import type { CelebrationPayload } from '@/lib/ws/protocol';
 import type { TvStateResponse } from '@/lib/types';
 import PairingScreen from '@/components/tv/PairingScreen';
 import StartOverlay from '@/components/tv/StartOverlay';
@@ -33,11 +34,30 @@ export default function TvApp() {
     carouselRef.current = carousel;
   }, [carousel]);
 
+  // Mirrors `audioUnlocked` for the onCelebration WS handler, which must decide
+  // buffer-vs-dispatch against the latest value (same ref pattern useTvSocket uses
+  // internally for its own handlers).
+  const audioUnlockedRef = useRef(audioUnlocked);
+  useEffect(() => {
+    audioUnlockedRef.current = audioUnlocked;
+  }, [audioUnlocked]);
+
+  // Celebrations that arrive before the viewer has unlocked audio (StartOverlay still
+  // showing): browsers block autoplay with sound pre-gesture, so we can't play the
+  // anthem yet. Buffer them here and flush into the reducer's FIFO queue once unlocked.
+  const pendingCelebrations = useRef<CelebrationPayload[]>([]);
+
+  // Discards stale /api/tv/state responses that resolve out of order (e.g. a slow
+  // response from an earlier refresh landing after a newer one already completed).
+  const requestSeq = useRef(0);
+
   const refreshState = useCallback(async () => {
     const token = localStorage.getItem('tv_device_token');
     if (!token) return;
+    const seq = ++requestSeq.current;
     try {
       const res = await fetch('/api/tv/state', { headers: { 'x-device-token': token } });
+      if (seq !== requestSeq.current) return; // a newer refresh has since started; drop this one
       if (!res.ok) return;
       const json = (await res.json()) as { data: TvStateResponse };
       setTvState(json.data);
@@ -55,7 +75,13 @@ export default function TvApp() {
   }, []);
 
   const socket = useTvSocket({
-    onCelebration: (payload) => dispatch({ type: 'celebration', payload }),
+    onCelebration: (payload) => {
+      if (!audioUnlockedRef.current) {
+        pendingCelebrations.current.push(payload);
+        return;
+      }
+      dispatch({ type: 'celebration', payload });
+    },
     onDataUpdated: () => {
       void refreshState();
     },
@@ -65,7 +91,11 @@ export default function TvApp() {
     onPaired: () => {
       void refreshState();
     },
-    onUnpaired: () => setTvState(null),
+    onUnpaired: () => {
+      setTvState(null);
+      dispatch({ type: 'reset' });
+      pendingCelebrations.current = [];
+    },
   });
 
   useEffect(() => {
@@ -90,23 +120,30 @@ export default function TvApp() {
 
   const handleCelebrationDone = useCallback(() => dispatch({ type: 'celebrationDone' }), []);
 
-  if (socket.phase === 'connecting' || socket.phase === 'pairing') {
-    return <PairingScreen pairCode={socket.pairCode} />;
-  }
+  const handleStart = useCallback(() => {
+    setAudioUnlocked(true);
+    // Flush anything that arrived while audio was still locked, in original order;
+    // the reducer's existing FIFO queue takes it from here.
+    const queued = pendingCelebrations.current;
+    pendingCelebrations.current = [];
+    queued.forEach((payload) => dispatch({ type: 'celebration', payload }));
+  }, []);
 
   const currentSlide = carousel.slides.length > 0 ? carousel.slides[carousel.index] : null;
 
-  let slideContent: ReactNode = null;
-  if (!tvState || !currentSlide) {
-    slideContent = (
-      <div className="flex h-full items-center justify-center">
-        <p className="font-display text-5xl text-muted">SALES CHAMPIONS TV</p>
-      </div>
-    );
-  } else {
+  // Memoized so a bare 250ms tick (which only changes carousel.remainingMs) doesn't
+  // rebuild the slide subtree — deliberately excludes remainingMs from deps.
+  const slideContent = useMemo<ReactNode>(() => {
+    if (!tvState || !currentSlide) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <p className="font-display text-5xl text-muted">SALES CHAMPIONS TV</p>
+        </div>
+      );
+    }
     switch (currentSlide.key) {
       case 'leaderboard_sales_count':
-        slideContent = (
+        return (
           <LeaderboardSlide
             title="SALES CHAMPIONS"
             metric="sales_count"
@@ -114,9 +151,8 @@ export default function TvApp() {
             periodLabel={tvState.periodLabel}
           />
         );
-        break;
       case 'leaderboard_gci':
-        slideContent = (
+        return (
           <LeaderboardSlide
             title="TOP EARNERS"
             metric="gci"
@@ -124,9 +160,8 @@ export default function TvApp() {
             periodLabel={tvState.periodLabel}
           />
         );
-        break;
       case 'leaderboard_listings':
-        slideContent = (
+        return (
           <LeaderboardSlide
             title="LISTING LEGENDS"
             metric="listings"
@@ -134,17 +169,21 @@ export default function TvApp() {
             periodLabel={tvState.periodLabel}
           />
         );
-        break;
       case 'goal_progress':
-        slideContent = <GoalSlide goals={tvState.goals} />;
-        break;
+        return <GoalSlide goals={tvState.goals} />;
       case 'listings':
-        slideContent = <ListingsSlide listings={tvState.listings} />;
-        break;
+        return <ListingsSlide listings={tvState.listings} />;
       case 'announcements':
-        slideContent = <AnnouncementSlide announcements={tvState.announcements.slice(0, 5)} />;
-        break;
+        return <AnnouncementSlide announcements={tvState.announcements.slice(0, 5)} />;
+      default:
+        return null;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentSlide is derived
+    // purely from carousel.index/carousel.slides, both already listed below.
+  }, [carousel.index, carousel.slides, tvState]);
+
+  if (socket.phase === 'connecting' || socket.phase === 'pairing') {
+    return <PairingScreen pairCode={socket.pairCode} />;
   }
 
   return (
@@ -173,7 +212,7 @@ export default function TvApp() {
         ) : null}
       </AnimatePresence>
 
-      {!audioUnlocked ? <StartOverlay onStart={() => setAudioUnlocked(true)} /> : null}
+      {!audioUnlocked ? <StartOverlay onStart={handleStart} /> : null}
       {socket.phase === 'offline' ? <OfflineBadge /> : null}
     </div>
   );

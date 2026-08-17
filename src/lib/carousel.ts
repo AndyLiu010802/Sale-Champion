@@ -16,7 +16,8 @@ export type CarouselEvent =
   | { type: 'tick'; dtMs: number }
   | { type: 'celebration'; payload: CelebrationPayload }
   | { type: 'celebrationDone' }
-  | { type: 'setSlides'; slides: CarouselSlide[] };
+  | { type: 'setSlides'; slides: CarouselSlide[] }
+  | { type: 'reset' };
 
 const MIN_RESUME_MS = 3_000;
 
@@ -66,6 +67,11 @@ export function carouselReducer(state: CarouselState, event: CarouselEvent): Car
       }
       const index = state.index % slides.length;
       return { ...state, slides, index, remainingMs: slides[index].durationSec * 1000 };
+    }
+    case 'reset': {
+      // Unpaired / re-registering: drop cached slides, any in-flight celebration and
+      // its queue — the next paired session starts from a clean slate.
+      return initCarousel([]);
     }
   }
 }

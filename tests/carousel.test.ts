@@ -181,3 +181,22 @@ describe('setSlides', () => {
     expect(s.remainingMs).toBe(0);
   });
 });
+
+describe('reset', () => {
+  it('clears everything, even mid-celebration with a queued item', () => {
+    let s = carouselReducer(initCarousel(slides), { type: 'celebration', payload: payload('sale-1') });
+    s = carouselReducer(s, { type: 'celebration', payload: payload('sale-2') });
+    s = carouselReducer(s, { type: 'reset' });
+    expect(s).toEqual(initCarousel([]));
+  });
+
+  it('is safe to tick after a reset (no-op, no crash)', () => {
+    let s = carouselReducer(initCarousel(slides), { type: 'tick', dtMs: 4_000 });
+    s = carouselReducer(s, { type: 'reset' });
+    s = carouselReducer(s, { type: 'tick', dtMs: 250 });
+    expect(s.index).toBe(0);
+    expect(s.remainingMs).toBe(0);
+    expect(s.mode).toBe('rotate');
+    expect(s.slides).toEqual([]);
+  });
+});
