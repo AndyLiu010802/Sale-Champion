@@ -1,13 +1,22 @@
 import path from 'node:path';
 import { requireAdmin } from '@/lib/auth/session';
-import { getStorage } from '@/lib/storage';
+import { getStorage, CONTENT_TYPES } from '@/lib/storage';
 
-const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.mp3', '.m4a', '.ogg'];
+const ALLOWED_EXTENSIONS = Object.keys(CONTENT_TYPES);
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
+// Multipart framing (boundary markers, field headers) adds overhead on top
+// of the raw file bytes; 1MB of slack keeps the early Content-Length check
+// from false-positiving on legitimate small-to-mid uploads.
+const MAX_CONTENT_LENGTH_BYTES = MAX_SIZE_BYTES + 1024 * 1024;
 
 export async function POST(req: Request) {
   const session = await requireAdmin(req);
   if (session instanceof Response) return session;
+
+  const contentLength = Number(req.headers.get('content-length') ?? '0');
+  if (contentLength > MAX_CONTENT_LENGTH_BYTES) {
+    return Response.json({ error: 'File too large (max 10MB)' }, { status: 413 });
+  }
 
   let form: FormData;
   try {
@@ -27,6 +36,12 @@ export async function POST(req: Request) {
     return Response.json({ error: 'File too large (max 10MB)' }, { status: 400 });
   }
   const buf = Buffer.from(await file.arrayBuffer());
-  const stored = await getStorage().save(buf, file.name, file.type || 'application/octet-stream');
-  return Response.json({ data: { url: stored.url } });
+  // Content type is derived from the (whitelisted) extension, never from the
+  // client-supplied `file.type` — a client can set that field to anything.
+  try {
+    const stored = await getStorage().save(buf, file.name, CONTENT_TYPES[ext]);
+    return Response.json({ data: { url: stored.url } });
+  } catch {
+    return Response.json({ error: 'Failed to store file' }, { status: 500 });
+  }
 }

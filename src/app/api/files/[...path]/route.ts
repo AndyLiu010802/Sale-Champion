@@ -1,15 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-
-const CONTENT_TYPES: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-  '.mp3': 'audio/mpeg',
-  '.m4a': 'audio/mp4',
-  '.ogg': 'audio/ogg',
-};
+import { CONTENT_TYPES } from '@/lib/storage';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ path: string[] }> }) {
   const { path: segments } = await ctx.params;
@@ -23,5 +14,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ path: string[]
     return Response.json({ error: 'Not found' }, { status: 404 });
   }
   const contentType = CONTENT_TYPES[path.extname(basename).toLowerCase()] ?? 'application/octet-stream';
-  return new Response(new Uint8Array(buf), { headers: { 'content-type': contentType } });
+  return new Response(new Uint8Array(buf), {
+    headers: { 'content-type': contentType, 'X-Content-Type-Options': 'nosniff' },
+  });
 }

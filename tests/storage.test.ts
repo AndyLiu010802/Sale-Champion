@@ -1,11 +1,19 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { jsonRequest } from './helpers/request';
 import { sealSession, SESSION_COOKIE } from '@/lib/auth/session';
-import { getStorage } from '@/lib/storage';
+import { getStorage, CONTENT_TYPES } from '@/lib/storage';
 import { POST as uploadsPost } from '@/app/api/uploads/route';
 import { GET as filesGet } from '@/app/api/files/[...path]/route';
+
+vi.mock('@aws-sdk/client-s3', () => {
+  const S3Client = vi.fn().mockImplementation(() => ({
+    send: vi.fn().mockResolvedValue({}),
+  }));
+  const PutObjectCommand = vi.fn().mockImplementation((input: Record<string, unknown>) => ({ input }));
+  return { S3Client, PutObjectCommand };
+});
 
 const STORAGE_DIR = path.join(process.cwd(), 'storage');
 
@@ -53,6 +61,13 @@ describe('POST /api/uploads', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects oversized uploads early via content-length', async () => {
+    const headers = { ...(await adminCookie()), 'content-length': '999999999' };
+    const req = multipart('small.png', new Uint8Array([1, 2, 3]), headers);
+    const res = await uploadsPost(req);
+    expect(res.status).toBe(413);
+  });
+
   it('stores an allowed file and returns { data: { url } }', async () => {
     const res = await uploadsPost(multipart('anthem.mp3', new Uint8Array([7, 7, 7]), await adminCookie()));
     expect(res.status).toBe(200);
@@ -60,6 +75,20 @@ describe('POST /api/uploads', () => {
     expect(data.url).toMatch(/^\/api\/files\/[0-9a-f-]{36}\.mp3$/);
     const basename = data.url.slice('/api/files/'.length);
     await expect(fs.stat(path.join(STORAGE_DIR, basename))).resolves.toBeTruthy();
+  });
+
+  it('derives the stored content type from the extension, not the client-supplied type', async () => {
+    // multipart() always sets the Blob's declared type to application/octet-stream,
+    // regardless of filename — the client's claimed type must be ignored server-side.
+    const res = await uploadsPost(multipart('anthem.mp3', new Uint8Array([7, 7, 7]), await adminCookie()));
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    const basename = data.url.slice('/api/files/'.length);
+    const served = await filesGet(jsonRequest(`/api/files/${basename}`), {
+      params: Promise.resolve({ path: [basename] }),
+    });
+    expect(served.headers.get('content-type')).toBe(CONTENT_TYPES['.mp3']);
+    expect(served.headers.get('content-type')).not.toBe('application/octet-stream');
   });
 });
 
@@ -72,6 +101,7 @@ describe('GET /api/files/[...path]', () => {
     });
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/webp');
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(await res.text()).toBe('imgdata');
   });
 
@@ -89,5 +119,54 @@ describe('GET /api/files/[...path]', () => {
       params: Promise.resolve({ path: ['..', '..', 'package.json'] }),
     });
     expect(res.status).toBe(404);
+  });
+});
+
+describe('S3Storage (R2)', () => {
+  const R2_ENV = {
+    R2_ENDPOINT: 'https://accountid.r2.cloudflarestorage.com',
+    R2_BUCKET: 'test-bucket',
+    R2_PUBLIC_BASE_URL: 'https://cdn.example.com/',
+    R2_ACCESS_KEY_ID: 'test-access-key',
+    R2_SECRET_ACCESS_KEY: 'test-secret-key',
+  };
+
+  it('throws naming the missing env var when R2_BUCKET is unset', async () => {
+    try {
+      vi.stubEnv('R2_ENDPOINT', R2_ENV.R2_ENDPOINT);
+      vi.stubEnv('R2_BUCKET', '');
+      vi.stubEnv('R2_PUBLIC_BASE_URL', R2_ENV.R2_PUBLIC_BASE_URL);
+      vi.stubEnv('R2_ACCESS_KEY_ID', R2_ENV.R2_ACCESS_KEY_ID);
+      vi.stubEnv('R2_SECRET_ACCESS_KEY', R2_ENV.R2_SECRET_ACCESS_KEY);
+      const { S3Storage } = await import('@/lib/storage/s3');
+      expect(() => new S3Storage()).toThrow('R2_BUCKET');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('save() sends a PutObjectCommand with the given content type and key extension, returning the public URL', async () => {
+    try {
+      vi.stubEnv('R2_ENDPOINT', R2_ENV.R2_ENDPOINT);
+      vi.stubEnv('R2_BUCKET', R2_ENV.R2_BUCKET);
+      vi.stubEnv('R2_PUBLIC_BASE_URL', R2_ENV.R2_PUBLIC_BASE_URL);
+      vi.stubEnv('R2_ACCESS_KEY_ID', R2_ENV.R2_ACCESS_KEY_ID);
+      vi.stubEnv('R2_SECRET_ACCESS_KEY', R2_ENV.R2_SECRET_ACCESS_KEY);
+      const { S3Storage } = await import('@/lib/storage/s3');
+      const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+      const storage = new S3Storage();
+      const result = await storage.save(Buffer.from('anthem-bytes'), 'anthem.mp3', 'audio/mpeg');
+
+      // R2_PUBLIC_BASE_URL had a trailing slash; publicBaseUrl strips it, so
+      // the returned url must have exactly one slash before the key.
+      expect(result.url).toMatch(/^https:\/\/cdn\.example\.com\/[0-9a-f-]{36}\.mp3$/);
+
+      const call = vi.mocked(PutObjectCommand).mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined;
+      expect(call?.Bucket).toBe('test-bucket');
+      expect(call?.ContentType).toBe('audio/mpeg');
+      expect(String(call?.Key)).toMatch(/^[0-9a-f-]{36}\.mp3$/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
