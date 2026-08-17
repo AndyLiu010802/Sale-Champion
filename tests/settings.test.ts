@@ -5,6 +5,7 @@ import { getSettings, saveSettings, DEFAULT_SETTINGS, type SettingsData } from '
 import { getHub } from '@/lib/ws/hub';
 import { GET as settingsGet, PUT as settingsPut } from '@/app/api/settings/route';
 import type { Db } from '@/lib/db';
+import { settings } from '@/lib/db/schema';
 
 let db: Db;
 let orgId: string;
@@ -29,6 +30,11 @@ describe('getSettings / saveSettings', () => {
     await saveSettings(db, orgId, again); // 走 onConflictDoUpdate 的 update 分支
     expect(await getSettings(db, orgId)).toEqual(again);
   });
+
+  it('falls back to defaults when stored data is malformed', async () => {
+    await db.insert(settings).values({ orgId, data: { garbage: true }, updatedAt: new Date() });
+    expect(await getSettings(db, orgId)).toEqual(DEFAULT_SETTINGS);
+  });
 });
 
 describe('/api/settings', () => {
@@ -43,11 +49,28 @@ describe('/api/settings', () => {
     expect((await res.json()).data).toEqual(DEFAULT_SETTINGS);
   });
 
+  it('PUT requires admin session', async () => {
+    const res = await settingsPut(jsonRequest('/api/settings', { method: 'PUT', body: DEFAULT_SETTINGS }));
+    expect(res.status).toBe(401);
+  });
+
   it('PUT rejects out-of-range celebrationDurationSec', async () => {
     const bad = { ...DEFAULT_SETTINGS, celebrationDurationSec: 40 };
     const res = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: bad }));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBeTypeOf('string');
+  });
+
+  it('rejects slides with missing or duplicate keys', async () => {
+    // Missing one key (only 5 of the 6 required slide keys present).
+    const missingKey = { ...DEFAULT_SETTINGS, slides: DEFAULT_SETTINGS.slides.slice(0, 5) };
+    const res1 = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: missingKey }));
+    expect(res1.status).toBe(400);
+
+    // Duplicate key (7 entries, first key repeated, one key missing overall).
+    const duplicateKey = { ...DEFAULT_SETTINGS, slides: [DEFAULT_SETTINGS.slides[0], ...DEFAULT_SETTINGS.slides] };
+    const res2 = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: duplicateKey }));
+    expect(res2.status).toBe(400);
   });
 
   it('PUT saves settings and broadcasts config.updated to paired sockets', async () => {

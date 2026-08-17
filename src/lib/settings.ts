@@ -30,7 +30,13 @@ export const settingsSchema: z.ZodType<SettingsData> = z.object({
   celebrationDurationSec: z.number().int().min(10).max(30),
   volume: z.number().min(0).max(1),
   defaultAnthemUrl: z.string().nullable(),
-});
+}).refine(
+  (s) => {
+    const keys = new Set(s.slides.map((x) => x.key));
+    return keys.size === s.slides.length && keys.size === SLIDE_KEYS.length;
+  },
+  { message: 'slides must contain each slide key exactly once' },
+);
 
 export const DEFAULT_SETTINGS: SettingsData = {
   slides: [
@@ -50,7 +56,8 @@ export const DEFAULT_SETTINGS: SettingsData = {
 export async function getSettings(db: Db, orgId: string): Promise<SettingsData> {
   const rows = await db.select().from(settings).where(eq(settings.orgId, orgId)).limit(1);
   if (!rows[0]) return DEFAULT_SETTINGS;
-  return rows[0].data as SettingsData;
+  const parsed = settingsSchema.safeParse(rows[0].data);
+  return parsed.success ? parsed.data : DEFAULT_SETTINGS;
 }
 
 export async function saveSettings(db: Db, orgId: string, data: SettingsData): Promise<void> {
