@@ -1,7 +1,21 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { TvAnnouncement } from '@/lib/types';
+
+function AnnouncementImage({ imageUrl, title }: { imageUrl: string; title: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <img
+      src={imageUrl}
+      alt={title}
+      className="h-40 w-64 rounded-lg object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 export default function AnnouncementSlide({ announcements }: { announcements: TvAnnouncement[] }) {
   return (
@@ -22,12 +36,12 @@ export default function AnnouncementSlide({ announcements }: { announcements: Tv
               className="flex items-start gap-8 rounded-xl bg-panel p-8"
             >
               <div className="flex-1">
-                <h2 className="font-heading text-4xl text-ink">{a.title}</h2>
-                {a.body ? <p className="mt-3 text-2xl leading-relaxed text-muted">{a.body}</p> : null}
+                <h2 className="truncate font-heading text-4xl text-ink">{a.title}</h2>
+                {a.body ? (
+                  <p className="mt-3 line-clamp-2 text-2xl leading-relaxed text-muted">{a.body}</p>
+                ) : null}
               </div>
-              {a.imageUrl ? (
-                <img src={a.imageUrl} alt={a.title} className="h-40 w-64 rounded-lg object-cover" />
-              ) : null}
+              {a.imageUrl ? <AnnouncementImage imageUrl={a.imageUrl} title={a.title} /> : null}
             </motion.div>
           ))}
         </div>

@@ -1,8 +1,24 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { TvListing } from '@/lib/types';
 import { formatMoney } from '@/lib/format';
+
+function ListingPhoto({ photoUrl, address }: { photoUrl: string | null; address: string }) {
+  const [failed, setFailed] = useState(false);
+  if (photoUrl && !failed) {
+    return (
+      <img
+        src={photoUrl}
+        alt={address}
+        className="h-48 w-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return <div className="flex h-48 w-full items-center justify-center bg-panel-2 text-6xl">🏠</div>;
+}
 
 export default function ListingsSlide({ listings }: { listings: TvListing[] }) {
   return (
@@ -22,18 +38,14 @@ export default function ListingsSlide({ listings }: { listings: TvListing[] }) {
               transition={{ delay: i * 0.07, duration: 0.35 }}
               className="flex flex-col overflow-hidden rounded-xl bg-panel"
             >
-              {listing.photoUrl ? (
-                <img src={listing.photoUrl} alt={listing.address} className="h-48 w-full object-cover" />
-              ) : (
-                <div className="flex h-48 w-full items-center justify-center bg-panel-2 text-6xl">🏠</div>
-              )}
+              <ListingPhoto photoUrl={listing.photoUrl} address={listing.address} />
               <div className="flex flex-1 flex-col justify-between p-5">
-                <p className="font-heading text-2xl leading-tight text-ink">{listing.address}</p>
+                <p className="truncate font-heading text-2xl leading-tight text-ink">{listing.address}</p>
                 <div className="mt-3">
                   <p className="font-display text-3xl text-neon neon-text">
                     {formatMoney(listing.listPriceCents)}
                   </p>
-                  <p className="mt-1 text-xl text-muted">{listing.agentName}</p>
+                  <p className="mt-1 truncate text-xl text-muted">{listing.agentName}</p>
                 </div>
               </div>
             </motion.div>

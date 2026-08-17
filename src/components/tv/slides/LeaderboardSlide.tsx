@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { LeaderboardEntry, Metric } from '@/lib/types';
 import { formatValue } from '@/lib/format';
@@ -19,12 +20,20 @@ function rankBadgeClass(rank: number): string {
 }
 
 function Avatar({ name, photoUrl }: { name: string; photoUrl: string | null }) {
-  if (photoUrl) {
-    return <img src={photoUrl} alt={name} className="h-14 w-14 rounded-full object-cover" />;
+  const [failed, setFailed] = useState(false);
+  if (photoUrl && !failed) {
+    return (
+      <img
+        src={photoUrl}
+        alt={name}
+        className="h-14 w-14 rounded-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    );
   }
   return (
     <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-neon bg-panel-2 font-display text-2xl text-neon">
-      {name.charAt(0).toUpperCase()}
+      {(Array.from(name)[0] ?? '?').toUpperCase()}
     </span>
   );
 }

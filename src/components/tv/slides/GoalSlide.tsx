@@ -25,7 +25,7 @@ export default function GoalSlide({ goals }: { goals: GoalProgress[] }) {
         </div>
       ) : (
         <div className="mt-12 flex flex-1 flex-col justify-center gap-10">
-          {goals.map((goal, i) => (
+          {goals.slice(0, 4).map((goal, i) => (
             <motion.div
               key={goal.id}
               initial={{ opacity: 0, y: 30 }}
