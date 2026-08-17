@@ -15,19 +15,24 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    setBusy(false);
-    if (res.ok) {
-      router.push('/admin');
-      router.refresh();
-      return;
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (res.ok) {
+        router.push('/admin');
+        router.refresh();
+        return;
+      }
+      const body = (await res.json().catch(() => ({ error: 'Login failed' }))) as { error?: string };
+      setError(body.error ?? 'Login failed');
+    } catch {
+      setError('Network error, please try again');
+    } finally {
+      setBusy(false);
     }
-    const body = (await res.json().catch(() => ({ error: 'Login failed' }))) as { error?: string };
-    setError(body.error ?? 'Login failed');
   }
 
   return (

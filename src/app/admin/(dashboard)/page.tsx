@@ -21,8 +21,9 @@ function todayLocal(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function toCents(dollars: string): number {
-  return Math.round(parseFloat(dollars) * 100);
+function toCents(dollars: string): number | null {
+  const cents = Math.round(parseFloat(dollars) * 100);
+  return Number.isFinite(cents) ? cents : null;
 }
 
 function emptyForm() {
@@ -36,13 +37,28 @@ export default function DashboardPage() {
   const [editing, setEditing] = useState<SaleRow | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
   const [replayedId, setReplayedId] = useState<string | null>(null);
+  const [replayingId, setReplayingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Full agent list (active + inactive) — needed so an already-recorded sale for a
+  // now-deactivated agent can still show that agent's name and be edited without
+  // reassigning it. Views that let the admin *pick* an agent filter down to `active`.
+  const activeAgents = agents.filter((a) => a.active);
+  // If the sale being edited belongs to an agent who has since been deactivated, that
+  // agent won't be in `activeAgents` — add it back as an extra option so the required
+  // <select> still has a valid selected value and native validation doesn't block
+  // address/price/date-only edits.
+  const editingInactiveAgent = editing
+    ? agents.find((a) => a.id === editing.agentId && !a.active)
+    : undefined;
 
   const load = useCallback(async () => {
     const [agentsRes, salesRes] = await Promise.all([fetch('/api/agents'), fetch('/api/sales')]);
     if (agentsRes.ok) {
       const body = (await agentsRes.json()) as { data: AgentRow[] };
-      setAgents(body.data.filter((a) => a.active));
+      setAgents(body.data);
     }
     if (salesRes.ok) {
       const body = (await salesRes.json()) as { data: SaleRow[] };
@@ -57,24 +73,35 @@ export default function DashboardPage() {
   async function createSale(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    const res = await fetch('/api/sales', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        agentId: form.agentId,
-        address: form.address,
-        salePriceCents: toCents(form.salePrice),
-        gciCents: toCents(form.gci),
-        saleDate: form.saleDate,
-      }),
-    });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({ error: 'Failed to save sale' }))) as { error?: string };
-      setError(body.error ?? 'Failed to save sale');
+    const salePriceCents = toCents(form.salePrice);
+    const gciCents = toCents(form.gci);
+    if (salePriceCents === null || gciCents === null) {
+      setError('Invalid amount');
       return;
     }
-    setForm(emptyForm());
-    await load();
+    setCreating(true);
+    try {
+      const res = await fetch('/api/sales', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          agentId: form.agentId,
+          address: form.address,
+          salePriceCents,
+          gciCents,
+          saleDate: form.saleDate,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({ error: 'Failed to save sale' }))) as { error?: string };
+        setError(body.error ?? 'Failed to save sale');
+        return;
+      }
+      setForm(emptyForm());
+      await load();
+    } finally {
+      setCreating(false);
+    }
   }
 
   function openEdit(sale: SaleRow) {
@@ -91,6 +118,14 @@ export default function DashboardPage() {
   async function saveEdit(e: FormEvent) {
     e.preventDefault();
     if (!editing) return;
+    setError(null);
+
+    const salePriceCents = toCents(editForm.salePrice);
+    const gciCents = toCents(editForm.gci);
+    if (salePriceCents === null || gciCents === null) {
+      setError('Invalid amount');
+      return;
+    }
 
     // Diff-only PATCH: only send fields that actually changed from the original sale.
     // Sending an unchanged agentId would still re-trigger the API's active-agent check,
@@ -99,9 +134,7 @@ export default function DashboardPage() {
     const patch: Record<string, string | number> = {};
     if (editForm.agentId !== editing.agentId) patch.agentId = editForm.agentId;
     if (editForm.address !== editing.address) patch.address = editForm.address;
-    const salePriceCents = toCents(editForm.salePrice);
     if (salePriceCents !== editing.salePriceCents) patch.salePriceCents = salePriceCents;
-    const gciCents = toCents(editForm.gci);
     if (gciCents !== editing.gciCents) patch.gciCents = gciCents;
     if (editForm.saleDate !== editing.saleDate) patch.saleDate = editForm.saleDate;
 
@@ -110,28 +143,46 @@ export default function DashboardPage() {
       return;
     }
 
-    const res = await fetch(`/api/sales/${editing.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    if (res.ok) {
-      setEditing(null);
-      await load();
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/sales/${editing.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (res.ok) {
+        setEditing(null);
+        await load();
+      }
+    } finally {
+      setSavingEdit(false);
     }
   }
 
   async function deleteSale(id: string) {
     if (!window.confirm('Delete this sale? Leaderboards will recalculate.')) return;
+    setError(null);
     const res = await fetch(`/api/sales/${id}`, { method: 'DELETE' });
-    if (res.ok) await load();
+    if (res.ok) {
+      await load();
+    } else {
+      setError('Failed to delete sale');
+    }
   }
 
   async function replay(id: string) {
-    const res = await fetch(`/api/sales/${id}/replay`, { method: 'POST' });
-    if (res.ok) {
-      setReplayedId(id);
-      setTimeout(() => setReplayedId((cur) => (cur === id ? null : cur)), 2000);
+    setError(null);
+    setReplayingId(id);
+    try {
+      const res = await fetch(`/api/sales/${id}/replay`, { method: 'POST' });
+      if (res.ok) {
+        setReplayedId(id);
+        setTimeout(() => setReplayedId((cur) => (cur === id ? null : cur)), 2000);
+      } else {
+        setError('Failed to replay celebration');
+      }
+    } finally {
+      setReplayingId((cur) => (cur === id ? null : cur));
     }
   }
 
@@ -149,7 +200,7 @@ export default function DashboardPage() {
               required
             >
               <option value="">Select agent…</option>
-              {agents.map((a) => (
+              {activeAgents.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>
@@ -195,7 +246,9 @@ export default function DashboardPage() {
         </div>
         {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
         <div className="mt-4">
-          <Button type="submit">Save sale 🎉</Button>
+          <Button type="submit" disabled={creating}>
+            Save sale 🎉
+          </Button>
         </div>
       </form>
 
@@ -216,7 +269,11 @@ export default function DashboardPage() {
                 <Button variant="danger" onClick={() => deleteSale(s.id)}>
                   Delete
                 </Button>
-                <Button variant="ghost" onClick={() => replay(s.id)}>
+                <Button
+                  variant="ghost"
+                  onClick={() => replay(s.id)}
+                  disabled={replayingId === s.id}
+                >
                   Replay 🎉
                 </Button>
                 {replayedId === s.id && <span className="text-sm text-neon">Replayed!</span>}
@@ -242,11 +299,16 @@ export default function DashboardPage() {
               required
             >
               <option value="">Select agent…</option>
-              {agents.map((a) => (
+              {activeAgents.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>
               ))}
+              {editingInactiveAgent && (
+                <option value={editingInactiveAgent.id}>
+                  {editingInactiveAgent.name} (inactive)
+                </option>
+              )}
             </Select>
           </Field>
           <Field label="Address">
@@ -288,7 +350,9 @@ export default function DashboardPage() {
             <Button variant="ghost" onClick={() => setEditing(null)}>
               Cancel
             </Button>
-            <Button type="submit">Save changes</Button>
+            <Button type="submit" disabled={savingEdit}>
+              Save changes
+            </Button>
           </div>
         </form>
       </Modal>
