@@ -41,7 +41,9 @@ export default function AnnouncementSlide({ announcements }: { announcements: Tv
                   <p className="mt-3 line-clamp-2 text-2xl leading-relaxed text-muted">{a.body}</p>
                 ) : null}
               </div>
-              {a.imageUrl ? <AnnouncementImage imageUrl={a.imageUrl} title={a.title} /> : null}
+              {a.imageUrl ? (
+                <AnnouncementImage key={a.imageUrl ?? 'none'} imageUrl={a.imageUrl} title={a.title} />
+              ) : null}
             </motion.div>
           ))}
         </div>

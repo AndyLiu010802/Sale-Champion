@@ -38,7 +38,7 @@ export default function ListingsSlide({ listings }: { listings: TvListing[] }) {
               transition={{ delay: i * 0.07, duration: 0.35 }}
               className="flex flex-col overflow-hidden rounded-xl bg-panel"
             >
-              <ListingPhoto photoUrl={listing.photoUrl} address={listing.address} />
+              <ListingPhoto key={listing.photoUrl ?? 'none'} photoUrl={listing.photoUrl} address={listing.address} />
               <div className="flex flex-1 flex-col justify-between p-5">
                 <p className="truncate font-heading text-2xl leading-tight text-ink">{listing.address}</p>
                 <div className="mt-3">

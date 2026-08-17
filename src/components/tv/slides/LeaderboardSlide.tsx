@@ -73,7 +73,7 @@ export default function LeaderboardSlide({
               <span className={`w-16 text-center font-display text-4xl ${rankBadgeClass(entry.rank)}`}>
                 {entry.rank}
               </span>
-              <Avatar name={entry.name} photoUrl={entry.photoUrl} />
+              <Avatar key={entry.photoUrl ?? 'none'} name={entry.name} photoUrl={entry.photoUrl} />
               <span className="flex-1 truncate font-heading text-4xl text-ink">{entry.name}</span>
               <span className="font-display text-4xl text-money neon-text">
                 {formatValue(metric, entry.value)}
