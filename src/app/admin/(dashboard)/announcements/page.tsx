@@ -266,6 +266,7 @@ export default function AnnouncementsPage() {
             <TextInput
               type="number"
               step="1"
+              min="0"
               value={form.sortOrder}
               onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
               required

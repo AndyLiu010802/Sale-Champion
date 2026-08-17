@@ -203,7 +203,18 @@ export default function GoalsPage() {
           <Field label="Metric">
             <Select
               value={form.metric}
-              onChange={(e) => setForm({ ...form, metric: e.target.value as Metric })}
+              onChange={(e) => {
+                const m = e.target.value as Metric;
+                // Clear the target text when switching across the gci/non-gci boundary —
+                // otherwise a value typed as dollars (e.g. "500000.00" for a GCI goal)
+                // would silently get reinterpreted as a raw count (500000 sales) or
+                // vice versa when the metric changes.
+                setForm((f) => ({
+                  ...f,
+                  metric: m,
+                  target: (m === 'gci') === (f.metric === 'gci') ? f.target : '',
+                }));
+              }}
             >
               {METRICS.map((m) => (
                 <option key={m} value={m}>

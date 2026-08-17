@@ -10,7 +10,7 @@ const patchSchema = z.object({
   title: z.string().min(1).optional(),
   body: z.string().min(1).nullable().optional(),
   imageUrl: z.string().min(1).nullable().optional(),
-  sortOrder: z.number().int().optional(),
+  sortOrder: z.number().int().min(0).optional(),
   enabled: z.boolean().optional(),
 });
 

@@ -10,7 +10,7 @@ const createSchema = z.object({
   title: z.string().min(1),
   body: z.string().min(1).optional(),
   imageUrl: z.string().min(1).optional(),
-  sortOrder: z.number().int().optional(),
+  sortOrder: z.number().int().min(0).optional(),
 });
 
 export async function GET(req: Request) {
