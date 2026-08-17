@@ -135,4 +135,28 @@ describe('ws integration (real server, real sockets)', () => {
     await waitFor(() => messages.some((m) => m.type === 'pong'));
     ws.close();
   });
+
+  it('a second hello on the same connection closes it', async () => {
+    const token = generateDeviceToken();
+    const screenId = crypto.randomUUID();
+    await db.insert(screens).values({
+      id: screenId,
+      orgId: basics.orgId,
+      name: 'Lobby TV',
+      deviceTokenHash: hashToken(token),
+      status: 'paired',
+    });
+
+    const ws = await connect();
+    ws.send(JSON.stringify({ type: 'hello', deviceToken: token }));
+    await waitFor(() => getHub().isOnline(screenId));
+
+    const idsBeforeSecondHello = getHub().onlineScreenIds();
+    const closed = new Promise<void>((resolve) => ws.on('close', () => resolve()));
+    ws.send(JSON.stringify({ type: 'hello', deviceToken: token }));
+    await closed;
+
+    const newIds = getHub().onlineScreenIds().filter((id) => !idsBeforeSecondHello.includes(id));
+    expect(newIds).toEqual([]);
+  });
 });

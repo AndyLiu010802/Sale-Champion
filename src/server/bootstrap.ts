@@ -52,10 +52,17 @@ export async function startServer(
 
   wss.on('connection', (ws: WebSocket) => {
     let screenId: string | null = null;
+    let registered = false;
+    let lastSeenWrite = 0;
     const helloTimer = setTimeout(() => ws.close(), HELLO_TIMEOUT_MS);
 
     const handleHello = async (event: Extract<ClientEvent, { type: 'hello' }>) => {
-      clearTimeout(helloTimer);
+      // One-shot: once a hello has successfully registered this connection,
+      // any further hello closes it instead of racing a second registration.
+      if (registered) {
+        ws.close();
+        return;
+      }
 
       if (event.deviceToken) {
         const rows = await db.select().from(screens)
@@ -72,6 +79,8 @@ export async function startServer(
         }
         screenId = row.id;
         hub.register(row.id, ws, true);
+        registered = true;
+        clearTimeout(helloTimer);
         await db.update(screens).set({ lastSeenAt: new Date() })
           .where(eq(screens.id, row.id));
         return;
@@ -94,6 +103,8 @@ export async function startServer(
         }
         screenId = row.id;
         hub.register(row.id, ws, false);
+        registered = true;
+        clearTimeout(helloTimer);
         return;
       }
 
@@ -116,11 +127,15 @@ export async function startServer(
       } else if (event.type === 'ping') {
         try { ws.send(JSON.stringify({ type: 'pong' })); } catch { /* ignore */ }
         if (screenId) {
-          const id = screenId;
-          // fire-and-forget heartbeat persistence
-          db.update(screens).set({ lastSeenAt: new Date() })
-            .where(eq(screens.id, id))
-            .then(() => undefined, () => undefined);
+          const now = Date.now();
+          if (now - lastSeenWrite > 10_000) {
+            lastSeenWrite = now;
+            const id = screenId;
+            // fire-and-forget, throttled heartbeat persistence
+            db.update(screens).set({ lastSeenAt: new Date() })
+              .where(eq(screens.id, id))
+              .then(() => undefined, () => undefined);
+          }
         }
       }
     });
