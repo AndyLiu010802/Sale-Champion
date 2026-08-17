@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, gt, or } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
 import { screens } from '@/lib/db/schema';
@@ -13,8 +13,14 @@ export async function GET(req: Request): Promise<Response> {
   const orgId = await getOrgId(db);
   const hub = getHub();
 
+  // Paired screens always show; pending screens only show while their
+  // pairing code is still live, so expired/abandoned pending rows don't
+  // clutter the admin list (they get physically purged on next /tv/register).
   const rows = await db.select().from(screens)
-    .where(eq(screens.orgId, orgId))
+    .where(and(
+      eq(screens.orgId, orgId),
+      or(eq(screens.status, 'paired'), gt(screens.pairCodeExpiresAt, new Date())),
+    ))
     .orderBy(asc(screens.createdAt));
 
   const data = rows.map((s) => ({

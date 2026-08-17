@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
+import { getOrgId } from '@/lib/db/org';
 import { screens } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/session';
 import { getHub } from '@/lib/ws/hub';
@@ -21,9 +22,10 @@ export async function PATCH(
   }
 
   const db = await getDb();
+  const orgId = await getOrgId(db);
   const rows = await db.update(screens)
     .set({ name: parsed.data.name })
-    .where(eq(screens.id, id))
+    .where(and(eq(screens.id, id), eq(screens.orgId, orgId)))
     .returning();
   const row = rows[0];
   if (!row) return Response.json({ error: 'Not found' }, { status: 404 });
@@ -41,7 +43,10 @@ export async function DELETE(
   const { id } = await ctx.params;
 
   const db = await getDb();
-  const rows = await db.delete(screens).where(eq(screens.id, id)).returning();
+  const orgId = await getOrgId(db);
+  const rows = await db.delete(screens)
+    .where(and(eq(screens.id, id), eq(screens.orgId, orgId)))
+    .returning();
   if (!rows[0]) return Response.json({ error: 'Not found' }, { status: 404 });
 
   getHub().sendToScreen(id, { type: 'screen.unpaired' });

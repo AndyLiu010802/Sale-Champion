@@ -187,4 +187,68 @@ describe('screens & tv register API', () => {
     expect(res.status).toBe(404);
     expect((await res.json()).error).toBe('Not found');
   });
+
+  it('second claim of the same code gets 400', async () => {
+    const reg = await (await registerPost()).json();
+    const code = reg.data.pairCode as string;
+
+    const first = await pairPost(await authedRequest('/api/screens/pair', {
+      method: 'POST',
+      body: { pairCode: code, name: 'First Claim' },
+    }));
+    expect(first.status).toBe(200);
+
+    const second = await pairPost(await authedRequest('/api/screens/pair', {
+      method: 'POST',
+      body: { pairCode: code, name: 'Second Claim' },
+    }));
+    expect(second.status).toBe(400);
+    expect((await second.json()).error).toBe('Invalid or expired code');
+  });
+
+  it('pair, rename and unpair endpoints require auth', async () => {
+    const pairRes = await pairPost(jsonRequest('/api/screens/pair', {
+      method: 'POST',
+      body: { pairCode: 'AAAAAA', name: 'X' },
+    }));
+    expect(pairRes.status).toBe(401);
+
+    const patchRes = await screenPatch(
+      jsonRequest('/api/screens/some-id', { method: 'PATCH', body: { name: 'X' } }),
+      { params: Promise.resolve({ id: 'some-id' }) },
+    );
+    expect(patchRes.status).toBe(401);
+
+    const deleteRes = await screenDelete(
+      jsonRequest('/api/screens/some-id', { method: 'DELETE' }),
+      { params: Promise.resolve({ id: 'some-id' }) },
+    );
+    expect(deleteRes.status).toBe(401);
+  });
+
+  it('expired pending screens are hidden from the list', async () => {
+    const expiredId = crypto.randomUUID();
+    await db.insert(screens).values({
+      id: expiredId,
+      orgId: basics.orgId,
+      pairCode: 'CCCCCC',
+      pairCodeExpiresAt: new Date(Date.now() - 1000),
+      status: 'pending',
+    });
+    const liveId = crypto.randomUUID();
+    await db.insert(screens).values({
+      id: liveId,
+      orgId: basics.orgId,
+      pairCode: 'DDDDDD',
+      pairCodeExpiresAt: new Date(Date.now() + 60_000),
+      status: 'pending',
+    });
+
+    const res = await screensGet(await authedRequest('/api/screens'));
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    const ids = (data as any[]).map((s) => s.id);
+    expect(ids).not.toContain(expiredId);
+    expect(ids).toContain(liveId);
+  });
 });
