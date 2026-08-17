@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { freshDb, seedBasics } from './helpers/db';
 import { jsonRequest, authedRequest } from './helpers/request';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
-import { requireAdmin, SESSION_COOKIE } from '@/lib/auth/session';
+import { requireAdmin, sealSession, sessionSetCookie, SESSION_COOKIE } from '@/lib/auth/session';
 import { POST as loginPost } from '@/app/api/auth/login/route';
 import { POST as logoutPost } from '@/app/api/auth/logout/route';
 import { GET as healthGet } from '@/app/api/health/route';
@@ -106,5 +106,28 @@ describe('GET /api/health', () => {
     const res = await healthGet();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
+  });
+});
+
+describe('sessionSetCookie', () => {
+  it('includes Secure in production', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    try {
+      expect(sessionSetCookie('x')).toContain('; Secure');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(sessionSetCookie('x')).not.toContain('; Secure');
+  });
+});
+
+describe('SESSION_SECRET validation', () => {
+  it('rejects a too-short SESSION_SECRET', async () => {
+    vi.stubEnv('SESSION_SECRET', 'short');
+    try {
+      await expect(sealSession({ userId: 'x', email: 'x@test.dev' })).rejects.toThrow(/at least 32/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

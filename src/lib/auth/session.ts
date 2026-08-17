@@ -8,6 +8,7 @@ const TTL_SECONDS = 14 * 24 * 60 * 60; // 14 days
 function getSecret(): string {
   const secret = process.env.SESSION_SECRET;
   if (!secret) throw new Error('SESSION_SECRET environment variable is required');
+  if (secret.length < 32) throw new Error('SESSION_SECRET must be at least 32 characters long');
   return secret;
 }
 
