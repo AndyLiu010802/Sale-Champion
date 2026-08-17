@@ -5,6 +5,8 @@ import {
 export const orgs = pgTable('orgs', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
+  // 当天自动生日播报的防重复标记('YYYY-MM-DD');进程重启不重播(设计 §2/§5)
+  lastBirthdayBroadcastDate: date('last_birthday_broadcast_date', { mode: 'string' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -23,6 +25,8 @@ export const agents = pgTable('agents', {
   name: text('name').notNull(),
   photoUrl: text('photo_url'),
   anthemUrl: text('anthem_url'),
+  role: text('role').notNull().default('agent'), // 'agent' | 'staff'
+  birthday: text('birthday'),                    // 'MM-DD' 或 null
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -37,6 +37,30 @@ describe('database layer', () => {
     expect(rows[0].createdAt).toBeInstanceOf(Date);
   });
 
+  it('round-trips agent role/birthday and org lastBirthdayBroadcastDate', async () => {
+    const { orgId, agentId } = await seedBasics(db);
+
+    // 既有行走默认值:role='agent'、birthday 为 null(零迁移成本)
+    const [alice] = await db.select().from(agents).where(eq(agents.id, agentId));
+    expect(alice.role).toBe('agent');
+    expect(alice.birthday).toBeNull();
+
+    const staffId = crypto.randomUUID();
+    await db.insert(agents).values({
+      id: staffId, orgId, name: 'Front Desk Fay', role: 'staff', birthday: '08-18',
+    });
+    const [fay] = await db.select().from(agents).where(eq(agents.id, staffId));
+    expect(fay.role).toBe('staff');
+    expect(fay.birthday).toBe('08-18');
+
+    const [orgBefore] = await db.select().from(orgs).where(eq(orgs.id, orgId));
+    expect(orgBefore.lastBirthdayBroadcastDate).toBeNull();
+
+    await db.update(orgs).set({ lastBirthdayBroadcastDate: '2026-08-18' }).where(eq(orgs.id, orgId));
+    const [orgAfter] = await db.select().from(orgs).where(eq(orgs.id, orgId));
+    expect(orgAfter.lastBirthdayBroadcastDate).toBe('2026-08-18');
+  });
+
   it('getOrgId resolves the first org', async () => {
     const { orgId } = await seedBasics(db);
     expect(await getOrgId(db)).toBe(orgId);
