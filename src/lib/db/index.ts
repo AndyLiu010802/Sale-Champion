@@ -4,6 +4,7 @@ import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
 import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
 import { PGlite } from '@electric-sql/pglite';
 import { Pool } from 'pg';
+import fs from 'node:fs';
 import path from 'node:path';
 import * as schema from './schema';
 
@@ -23,9 +24,14 @@ async function buildDb(): Promise<Db> {
     await migratePg(db, MIGRATIONS);
     return db;
   }
-  const client = process.env.PGLITE_MEMORY === '1'
-    ? new PGlite()
-    : new PGlite(path.join(process.cwd(), '.data', 'pglite'));
+  let client: PGlite;
+  if (process.env.PGLITE_MEMORY === '1') {
+    client = new PGlite();
+  } else {
+    const dir = path.join(process.cwd(), '.data', 'pglite');
+    fs.mkdirSync(dir, { recursive: true });
+    client = new PGlite(dir);
+  }
   const db = drizzlePglite(client, { schema }) as unknown as Db;
   await migratePglite(db as any, MIGRATIONS);
   return db;
