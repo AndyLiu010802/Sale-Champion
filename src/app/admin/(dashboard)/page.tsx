@@ -115,6 +115,11 @@ export default function DashboardPage() {
     });
   }
 
+  function closeEdit() {
+    setEditing(null);
+    setError(null);
+  }
+
   async function saveEdit(e: FormEvent) {
     e.preventDefault();
     if (!editing) return;
@@ -150,10 +155,12 @@ export default function DashboardPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(patch),
       });
-      if (res.ok) {
-        setEditing(null);
-        await load();
+      if (!res.ok) {
+        setError('Failed to save changes');
+        return;
       }
+      setEditing(null);
+      await load();
     } finally {
       setSavingEdit(false);
     }
@@ -290,7 +297,7 @@ export default function DashboardPage() {
         )}
       </Table>
 
-      <Modal open={editing !== null} onClose={() => setEditing(null)} title="Edit sale">
+      <Modal open={editing !== null} onClose={closeEdit} title="Edit sale">
         <form onSubmit={saveEdit} className="space-y-4">
           <Field label="Agent">
             <Select
@@ -346,8 +353,9 @@ export default function DashboardPage() {
               required
             />
           </Field>
+          {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setEditing(null)}>
+            <Button variant="ghost" onClick={closeEdit}>
               Cancel
             </Button>
             <Button type="submit" disabled={savingEdit}>
