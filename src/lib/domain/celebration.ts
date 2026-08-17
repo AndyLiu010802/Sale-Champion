@@ -27,6 +27,7 @@ export function buildBirthdayPayload(
     agentId: agent.id,
     name: agent.name,
     photoUrl: agent.photoUrl,
-    durationSec: settings.celebrationDurationSec,
+    // Floor at 13s so the ~12.7s birthday melody never gets cut mid-phrase.
+    durationSec: Math.max(13, settings.celebrationDurationSec),
   };
 }

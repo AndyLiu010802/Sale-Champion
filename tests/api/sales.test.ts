@@ -274,4 +274,12 @@ describe('buildBirthdayPayload', () => {
     expect(payload.kind).toBe('birthday');
     expect(payload.photoUrl).toBeNull();
   });
+
+  it('floors durationSec below the melody length', () => {
+    const payload = buildBirthdayPayload(
+      { id: 'agent-3', name: 'Carol Diaz', photoUrl: null },
+      { ...DEFAULT_SETTINGS, celebrationDurationSec: 10 },
+    );
+    expect(payload.durationSec).toBe(13);
+  });
 });
