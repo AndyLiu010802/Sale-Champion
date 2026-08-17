@@ -63,7 +63,9 @@ export async function POST(req: Request) {
   const [agent] = await db
     .select()
     .from(agents)
-    .where(and(eq(agents.id, parsed.data.agentId), eq(agents.orgId, orgId)));
+    .where(
+      and(eq(agents.id, parsed.data.agentId), eq(agents.orgId, orgId), eq(agents.active, true)),
+    );
   if (!agent) return Response.json({ error: 'Unknown agent' }, { status: 400 });
 
   const [sale] = await db

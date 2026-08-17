@@ -12,7 +12,7 @@ export function buildCelebrationPayload(
     agentPhotoUrl: agent.photoUrl,
     address: sale.address,
     salePriceCents: sale.salePriceCents,
-    anthemUrl: agent.anthemUrl ?? settings.defaultAnthemUrl,
+    anthemUrl: agent.anthemUrl || settings.defaultAnthemUrl,
     durationSec: settings.celebrationDurationSec,
   };
 }

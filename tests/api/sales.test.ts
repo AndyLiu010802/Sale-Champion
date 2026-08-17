@@ -7,6 +7,9 @@ import { DEFAULT_SETTINGS } from '@/lib/settings';
 import { GET, POST } from '@/app/api/sales/route';
 import { PATCH, DELETE } from '@/app/api/sales/[id]/route';
 import { POST as REPLAY } from '@/app/api/sales/[id]/replay/route';
+import { POST as AGENTS_POST } from '@/app/api/agents/route';
+import { DELETE as AGENTS_DELETE } from '@/app/api/agents/[id]/route';
+import { buildCelebrationPayload } from '@/lib/domain/celebration';
 
 let basics: Basics;
 let events: ServerEvent[];
@@ -77,6 +80,20 @@ describe('POST /api/sales', () => {
         body: { ...saleBody(), agentId: 'ghost' },
       }),
     );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Unknown agent' });
+    expect(events).toEqual([]);
+  });
+
+  it('rejects sales for inactive agents', async () => {
+    const delRes = await AGENTS_DELETE(
+      await authedRequest(`/api/agents/${basics.agentId}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(delRes.status).toBe(200);
+    events.length = 0;
+
+    const res = await POST(await authedRequest('/api/sales', { method: 'POST', body: saleBody() }));
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'Unknown agent' });
     expect(events).toEqual([]);
@@ -158,6 +175,43 @@ describe('POST /api/sales/[id]/replay', () => {
     expect(res.status).toBe(404);
     expect(events).toEqual([]);
   });
+
+  it('replay uses the current agent after a PATCH reassignment', async () => {
+    const created = await (
+      await POST(await authedRequest('/api/sales', { method: 'POST', body: saleBody() }))
+    ).json();
+
+    const agentBRes = await AGENTS_POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Bob Tran', anthemUrl: 'builtin:hero' },
+      }),
+    );
+    expect(agentBRes.status).toBe(200);
+    const { data: agentB } = await agentBRes.json();
+
+    const patchRes = await PATCH(
+      await authedRequest(`/api/sales/${created.data.id}`, {
+        method: 'PATCH',
+        body: { agentId: agentB.id },
+      }),
+      { params: Promise.resolve({ id: created.data.id }) },
+    );
+    expect(patchRes.status).toBe(200);
+
+    events.length = 0;
+    const res = await REPLAY(
+      await authedRequest(`/api/sales/${created.data.id}/replay`, { method: 'POST' }),
+      { params: Promise.resolve({ id: created.data.id }) },
+    );
+    expect(res.status).toBe(200);
+
+    expect(events).toHaveLength(1);
+    const first = events[0];
+    if (first.type !== 'celebration.play') throw new Error('expected celebration.play');
+    expect(first.celebration.agentName).toBe('Bob Tran');
+    expect(first.celebration.anthemUrl).toBe('builtin:hero');
+  });
 });
 
 describe('DELETE /api/sales/[id]', () => {
@@ -177,5 +231,16 @@ describe('DELETE /api/sales/[id]', () => {
     const list = await (await GET(await authedRequest('/api/sales'))).json();
     expect(list.data).toHaveLength(0);
     expect(events).toEqual([{ type: 'data.updated', domain: 'sales' }]);
+  });
+});
+
+describe('buildCelebrationPayload', () => {
+  it('empty-string anthem falls back to the default', () => {
+    const celebration = buildCelebrationPayload(
+      { id: 'sale-1', address: '1 Main St', salePriceCents: 100 },
+      { name: 'Alice Ng', photoUrl: null, anthemUrl: '' },
+      DEFAULT_SETTINGS,
+    );
+    expect(celebration.anthemUrl).toBe(DEFAULT_SETTINGS.defaultAnthemUrl);
   });
 });

@@ -8,8 +8,8 @@ import { getHub } from '@/lib/ws/hub';
 
 const patchSchema = z.object({
   name: z.string().min(1).optional(),
-  photoUrl: z.string().nullable().optional(),
-  anthemUrl: z.string().nullable().optional(),
+  photoUrl: z.string().min(1).nullable().optional(),
+  anthemUrl: z.string().min(1).nullable().optional(),
   active: z.boolean().optional(),
 });
 

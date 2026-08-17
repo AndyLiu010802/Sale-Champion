@@ -8,8 +8,8 @@ import { getHub } from '@/lib/ws/hub';
 
 const createSchema = z.object({
   name: z.string().min(1),
-  photoUrl: z.string().optional(),
-  anthemUrl: z.string().optional(),
+  photoUrl: z.string().min(1).optional(),
+  anthemUrl: z.string().min(1).optional(),
 });
 
 export async function GET(req: Request) {
