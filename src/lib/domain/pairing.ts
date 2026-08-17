@@ -1,13 +1,20 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 
 export const PAIR_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'; // 无易混淆字符
 export const PAIR_CODE_TTL_MS = 15 * 60 * 1000;
 
-/** 6-char pairing code. `rand` is injectable for deterministic tests (defaults to Math.random). */
-export function generatePairCode(rand: () => number = Math.random): string {
+/**
+ * 6-char pairing code. Default path uses a CSPRNG (node:crypto randomInt).
+ * `rand` is injectable for deterministic tests; its output is clamped to the
+ * alphabet's upper bound so rand() === 1 cannot index out of range.
+ */
+export function generatePairCode(rand?: () => number): string {
   let code = '';
   for (let i = 0; i < 6; i++) {
-    code += PAIR_CODE_ALPHABET[Math.floor(rand() * PAIR_CODE_ALPHABET.length)];
+    const idx = rand
+      ? Math.min(PAIR_CODE_ALPHABET.length - 1, Math.floor(rand() * PAIR_CODE_ALPHABET.length))
+      : randomInt(0, PAIR_CODE_ALPHABET.length);
+    code += PAIR_CODE_ALPHABET[idx];
   }
   return code;
 }

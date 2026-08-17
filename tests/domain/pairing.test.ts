@@ -25,6 +25,13 @@ describe('generatePairCode', () => {
     let i = 0;
     expect(generatePairCode(() => values[i++])).toBe('2HZ2HZ');
   });
+
+  it('clamps injected rand at the upper bound', () => {
+    const code = generatePairCode(() => 1);
+    expect(code).toHaveLength(6);
+    for (const ch of code) expect(PAIR_CODE_ALPHABET).toContain(ch);
+    expect(code).toBe('ZZZZZZ');
+  });
 });
 
 describe('pairCodeExpiry', () => {
