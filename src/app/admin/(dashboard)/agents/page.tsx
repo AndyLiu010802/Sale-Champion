@@ -20,11 +20,14 @@ function anthemLabel(anthemUrl: string | null): string {
   return builtin ? builtin.name : 'Custom upload';
 }
 
-async function uploadFile(file: File): Promise<string | null> {
+async function uploadFile(file: File): Promise<string> {
   const fd = new FormData();
   fd.append('file', file);
   const res = await fetch('/api/uploads', { method: 'POST', body: fd });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? 'Upload failed');
+  }
   const body = (await res.json()) as { data: { url: string } };
   return body.data.url;
 }
@@ -39,7 +42,14 @@ export default function AgentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingAnthem, setUploadingAnthem] = useState(false);
   const anthemFileRef = useRef<HTMLInputElement>(null);
+  // Discard stale upload responses that resolve out of order (e.g. a slow upload
+  // from an earlier file selection landing after a newer selection already
+  // completed) — same requestSeq pattern as TvApp's refreshState.
+  const photoUploadSeq = useRef(0);
+  const anthemUploadSeq = useRef(0);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/agents');
@@ -79,10 +89,20 @@ export default function AgentsPage() {
   async function onPhotoChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = await uploadFile(file);
-    if (url) setPhotoUrl(url);
-    else setError('Photo upload failed');
-    e.target.value = '';
+    setError(null);
+    const seq = ++photoUploadSeq.current;
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadFile(file);
+      if (seq !== photoUploadSeq.current) return; // superseded by a newer photo selection
+      setPhotoUrl(url);
+    } catch (err) {
+      if (seq !== photoUploadSeq.current) return;
+      setError(err instanceof Error ? err.message : 'Photo upload failed');
+    } finally {
+      if (seq === photoUploadSeq.current) setUploadingPhoto(false);
+      e.target.value = '';
+    }
   }
 
   function onAnthemSelect(value: string) {
@@ -96,10 +116,20 @@ export default function AgentsPage() {
   async function onAnthemFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = await uploadFile(file);
-    if (url) setAnthemUrl(url);
-    else setError('Anthem upload failed');
-    e.target.value = '';
+    setError(null);
+    const seq = ++anthemUploadSeq.current;
+    setUploadingAnthem(true);
+    try {
+      const url = await uploadFile(file);
+      if (seq !== anthemUploadSeq.current) return; // superseded by a newer anthem selection
+      setAnthemUrl(url);
+    } catch (err) {
+      if (seq !== anthemUploadSeq.current) return;
+      setError(err instanceof Error ? err.message : 'Anthem upload failed');
+    } finally {
+      if (seq === anthemUploadSeq.current) setUploadingAnthem(false);
+      e.target.value = '';
+    }
   }
 
   async function save(e: FormEvent) {
@@ -164,7 +194,10 @@ export default function AgentsPage() {
         setError('Failed to update agent status');
       }
     } finally {
-      setTogglingId(null);
+      // Only clear the pending flag if no other toggle has started in the meantime
+      // (e.g. the admin toggled a different agent while this request was in flight) —
+      // otherwise this stale finally would incorrectly re-enable that other row.
+      setTogglingId((cur) => (cur === agent.id ? null : cur));
     }
   }
 
@@ -236,8 +269,10 @@ export default function AgentsPage() {
                 type="file"
                 accept=".jpg,.jpeg,.png,.webp"
                 onChange={onPhotoChange}
-                className="text-sm text-muted"
+                disabled={uploadingPhoto}
+                className="text-sm text-muted disabled:cursor-not-allowed disabled:opacity-50"
               />
+              {uploadingPhoto && <span className="text-sm text-muted">Uploading…</span>}
             </div>
           </Field>
           <Field label="Anthem">
@@ -257,14 +292,16 @@ export default function AgentsPage() {
             type="file"
             accept=".mp3,.m4a,.ogg"
             onChange={onAnthemFileChange}
+            disabled={uploadingAnthem}
             className="hidden"
           />
+          {uploadingAnthem && <p className="text-sm text-muted">Uploading anthem…</p>}
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={closeModal}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || uploadingPhoto || uploadingAnthem}>
               {editingAgent ? 'Save changes' : 'Create agent'}
             </Button>
           </div>
