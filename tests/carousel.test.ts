@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { initCarousel, carouselReducer, type CarouselSlide, type CarouselState } from '@/lib/carousel';
-import type { CelebrationPayload } from '@/lib/ws/protocol';
+import {
+  initCarousel, carouselReducer,
+  type CarouselSlide, type CarouselState, type QueuedCelebration,
+} from '@/lib/carousel';
 
 const slides: CarouselSlide[] = [
   { key: 'leaderboard_sales_count', durationSec: 10 },
@@ -13,8 +15,9 @@ const altSlides: CarouselSlide[] = [
   { key: 'announcements', durationSec: 8 },
 ];
 
-function payload(id: string): CelebrationPayload {
+function payload(id: string): QueuedCelebration {
   return {
+    kind: 'sale',
     saleId: id,
     agentName: 'Alice Ng',
     agentPhotoUrl: null,
@@ -22,6 +25,7 @@ function payload(id: string): CelebrationPayload {
     salePriceCents: 100_000_000,
     anthemUrl: null,
     durationSec: 18,
+    clientId: `client-${id}`,
   };
 }
 
@@ -78,7 +82,7 @@ describe('celebration', () => {
     let s = carouselReducer(initCarousel(slides), { type: 'tick', dtMs: 4_000 });
     s = carouselReducer(s, { type: 'celebration', payload: payload('sale-1') });
     expect(s.mode).toBe('celebrate');
-    expect(s.current?.saleId).toBe('sale-1');
+    expect(s.current?.clientId).toBe('client-sale-1');
     expect(s.index).toBe(0);
     expect(s.remainingMs).toBe(6_000);
     expect(s.queue).toEqual([]);
@@ -97,8 +101,25 @@ describe('celebration', () => {
     let s = carouselReducer(initCarousel(slides), { type: 'celebration', payload: payload('sale-1') });
     s = carouselReducer(s, { type: 'celebration', payload: payload('sale-2') });
     s = carouselReducer(s, { type: 'celebration', payload: payload('sale-3') });
-    expect(s.current?.saleId).toBe('sale-1');
-    expect(s.queue.map((p) => p.saleId)).toEqual(['sale-2', 'sale-3']);
+    expect(s.current?.clientId).toBe('client-sale-1');
+    expect(s.queue.map((p) => p.clientId)).toEqual(['client-sale-2', 'client-sale-3']);
+  });
+
+  it('accepts a birthday celebration through the same interrupt path', () => {
+    const birthday: QueuedCelebration = {
+      kind: 'birthday',
+      agentId: 'agent-1',
+      name: 'Alice Ng',
+      photoUrl: null,
+      durationSec: 18,
+      clientId: 'client-bday-1',
+    };
+    let s = carouselReducer(initCarousel(slides), { type: 'celebration', payload: birthday });
+    expect(s.mode).toBe('celebrate');
+    expect(s.current?.clientId).toBe('client-bday-1');
+    s = carouselReducer(s, { type: 'celebrationDone' });
+    expect(s.mode).toBe('rotate');
+    expect(s.current).toBeNull();
   });
 });
 
@@ -108,7 +129,7 @@ describe('celebrationDone', () => {
     s = carouselReducer(s, { type: 'celebration', payload: payload('sale-2') });
     s = carouselReducer(s, { type: 'celebrationDone' });
     expect(s.mode).toBe('celebrate');
-    expect(s.current?.saleId).toBe('sale-2');
+    expect(s.current?.clientId).toBe('client-sale-2');
     expect(s.queue).toEqual([]);
   });
 
@@ -136,7 +157,7 @@ describe('celebrationDone', () => {
     s = carouselReducer(s, { type: 'celebration', payload: payload('sale-2') });
     s = carouselReducer(s, { type: 'celebrationDone' }); // dequeues sale-2
     expect(s.mode).toBe('celebrate');
-    expect(s.current?.saleId).toBe('sale-2');
+    expect(s.current?.clientId).toBe('client-sale-2');
     s = carouselReducer(s, { type: 'celebrationDone' }); // queue now empty
     expect(s.mode).toBe('rotate');
     expect(s.current).toBeNull();
@@ -164,7 +185,7 @@ describe('setSlides', () => {
     let s = carouselReducer(initCarousel(slides), { type: 'celebration', payload: payload('sale-1') });
     s = carouselReducer(s, { type: 'setSlides', slides: altSlides });
     expect(s.mode).toBe('celebrate');
-    expect(s.current?.saleId).toBe('sale-1');
+    expect(s.current?.clientId).toBe('client-sale-1');
     expect(s.slides).toEqual(altSlides);
     s = carouselReducer(s, { type: 'celebrationDone' });
     expect(s.mode).toBe('rotate');

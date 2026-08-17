@@ -9,7 +9,7 @@ import { PATCH, DELETE } from '@/app/api/sales/[id]/route';
 import { POST as REPLAY } from '@/app/api/sales/[id]/replay/route';
 import { POST as AGENTS_POST } from '@/app/api/agents/route';
 import { DELETE as AGENTS_DELETE } from '@/app/api/agents/[id]/route';
-import { buildCelebrationPayload } from '@/lib/domain/celebration';
+import { buildCelebrationPayload, buildBirthdayPayload } from '@/lib/domain/celebration';
 
 let basics: Basics;
 let events: ServerEvent[];
@@ -50,6 +50,7 @@ describe('POST /api/sales', () => {
     const first = events[0];
     if (first.type !== 'celebration.play') throw new Error('expected celebration.play first');
     const c = first.celebration;
+    if (c.kind !== 'sale') throw new Error('expected a sale celebration');
     expect(c.saleId).toBe(data.id);
     expect(c.agentName).toBe('Alice Ng');
     expect(c.agentPhotoUrl).toBeNull();
@@ -162,9 +163,11 @@ describe('POST /api/sales/[id]/replay', () => {
     expect(events).toHaveLength(1);
     const first = events[0];
     if (first.type !== 'celebration.play') throw new Error('expected celebration.play');
-    expect(first.celebration.saleId).toBe(created.data.id);
-    expect(first.celebration.agentName).toBe('Alice Ng');
-    expect(first.celebration.durationSec).toBe(18);
+    const c = first.celebration;
+    if (c.kind !== 'sale') throw new Error('expected a sale celebration');
+    expect(c.saleId).toBe(created.data.id);
+    expect(c.agentName).toBe('Alice Ng');
+    expect(c.durationSec).toBe(18);
   });
 
   it('returns 404 when the sale does not exist', async () => {
@@ -209,8 +212,10 @@ describe('POST /api/sales/[id]/replay', () => {
     expect(events).toHaveLength(1);
     const first = events[0];
     if (first.type !== 'celebration.play') throw new Error('expected celebration.play');
-    expect(first.celebration.agentName).toBe('Bob Tran');
-    expect(first.celebration.anthemUrl).toBe('builtin:hero');
+    const c = first.celebration;
+    if (c.kind !== 'sale') throw new Error('expected a sale celebration');
+    expect(c.agentName).toBe('Bob Tran');
+    expect(c.anthemUrl).toBe('builtin:hero');
   });
 });
 
@@ -235,12 +240,38 @@ describe('DELETE /api/sales/[id]', () => {
 });
 
 describe('buildCelebrationPayload', () => {
-  it('empty-string anthem falls back to the default', () => {
+  it('empty-string anthem falls back to the default and carries kind sale', () => {
     const celebration = buildCelebrationPayload(
       { id: 'sale-1', address: '1 Main St', salePriceCents: 100 },
       { name: 'Alice Ng', photoUrl: null, anthemUrl: '' },
       DEFAULT_SETTINGS,
     );
+    expect(celebration.kind).toBe('sale');
     expect(celebration.anthemUrl).toBe(DEFAULT_SETTINGS.defaultAnthemUrl);
+  });
+});
+
+describe('buildBirthdayPayload', () => {
+  it('builds a birthday payload with the org celebration duration', () => {
+    const payload = buildBirthdayPayload(
+      { id: 'agent-1', name: 'Alice Ng', photoUrl: '/files/alice.jpg' },
+      DEFAULT_SETTINGS,
+    );
+    expect(payload).toEqual({
+      kind: 'birthday',
+      agentId: 'agent-1',
+      name: 'Alice Ng',
+      photoUrl: '/files/alice.jpg',
+      durationSec: 18,
+    });
+  });
+
+  it('keeps photoUrl null when the member has no photo', () => {
+    const payload = buildBirthdayPayload(
+      { id: 'agent-2', name: 'Bob Tran', photoUrl: null },
+      DEFAULT_SETTINGS,
+    );
+    expect(payload.kind).toBe('birthday');
+    expect(payload.photoUrl).toBeNull();
   });
 });

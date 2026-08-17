@@ -20,6 +20,23 @@ const MELODIES: Record<string, Note[]> = {
     { freq: 587.33, dur: 0.4 }, { freq: 493.88, dur: 0.2 }, { freq: 587.33, dur: 0.4 },
     { freq: 783.99, dur: 0.6 }, { freq: 587.33, dur: 0.3 }, { freq: 783.99, dur: 0.9 },
   ],
+  // Birthday broadcasts only (BIRTHDAY_ANTHEM_ID) — deliberately absent from
+  // BUILTIN_ANTHEMS so it never shows in the agent anthem dropdown.
+  'builtin:birthday': [
+    // Happy birthday to you
+    { freq: 392, dur: 0.25 }, { freq: 392, dur: 0.25 }, { freq: 440, dur: 0.5 },
+    { freq: 392, dur: 0.5 }, { freq: 523.25, dur: 0.5 }, { freq: 493.88, dur: 1 },
+    // Happy birthday to you
+    { freq: 392, dur: 0.25 }, { freq: 392, dur: 0.25 }, { freq: 440, dur: 0.5 },
+    { freq: 392, dur: 0.5 }, { freq: 587.33, dur: 0.5 }, { freq: 523.25, dur: 1 },
+    // Happy birthday dear champion
+    { freq: 392, dur: 0.25 }, { freq: 392, dur: 0.25 }, { freq: 783.99, dur: 0.5 },
+    { freq: 659.25, dur: 0.5 }, { freq: 523.25, dur: 0.5 }, { freq: 493.88, dur: 0.5 },
+    { freq: 440, dur: 1 },
+    // Happy birthday to you
+    { freq: 698.46, dur: 0.25 }, { freq: 698.46, dur: 0.25 }, { freq: 659.25, dur: 0.5 },
+    { freq: 523.25, dur: 0.5 }, { freq: 587.33, dur: 0.5 }, { freq: 523.25, dur: 1.2 },
+  ],
 };
 
 let _ctx: AudioContext | null = null;
@@ -55,11 +72,10 @@ function playBuiltin(id: string, volume: number): { stop(): void } {
   master.connect(ctx.destination);
 
   const oscillators: OscillatorNode[] = [];
-  let loopTimer: ReturnType<typeof setTimeout> | null = null;
-  let stopped = false;
 
+  // Single pass: the melody plays exactly once (no self-rescheduling loop);
+  // the celebration visual runs out its own durationSec independently.
   const schedulePass = () => {
-    if (stopped) return;
     let t = ctx.currentTime + 0.05;
     for (const note of melody) {
       for (const type of ['square', 'sawtooth'] as const) {
@@ -80,8 +96,6 @@ function playBuiltin(id: string, volume: number): { stop(): void } {
       }
       t += note.dur;
     }
-    const passMs = melody.reduce((sum, n) => sum + n.dur, 0) * 1000;
-    loopTimer = setTimeout(schedulePass, passMs + 300);
   };
 
   try {
@@ -92,8 +106,6 @@ function playBuiltin(id: string, volume: number): { stop(): void } {
 
   return {
     stop() {
-      stopped = true;
-      if (loopTimer) clearTimeout(loopTimer);
       for (const osc of oscillators) {
         try {
           osc.stop();

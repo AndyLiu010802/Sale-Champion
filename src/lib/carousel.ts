@@ -3,18 +3,22 @@ import type { SlideKey } from './settings';
 
 export type CarouselSlide = { key: SlideKey; durationSec: number };
 
+// clientId:TV 端收到事件时本地生成的稳定挂载键——同一 payload(如同一 sale 连续
+// replay)也会重挂载 overlay;sale/birthday 两种 kind 统一用它当 React key。
+export type QueuedCelebration = CelebrationPayload & { clientId: string };
+
 export type CarouselState = {
   slides: CarouselSlide[];
   index: number;            // 0 when slides is empty; renderer shows idle
   remainingMs: number;
   mode: 'rotate' | 'celebrate';
-  current: CelebrationPayload | null;   // current celebration in celebrate mode
-  queue: CelebrationPayload[];          // FIFO
+  current: QueuedCelebration | null;   // current celebration in celebrate mode
+  queue: QueuedCelebration[];          // FIFO
 };
 
 export type CarouselEvent =
   | { type: 'tick'; dtMs: number }
-  | { type: 'celebration'; payload: CelebrationPayload }
+  | { type: 'celebration'; payload: QueuedCelebration }
   | { type: 'celebrationDone' }
   | { type: 'setSlides'; slides: CarouselSlide[] }
   | { type: 'reset' };

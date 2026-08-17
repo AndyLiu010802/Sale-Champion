@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTvSocket } from '@/hooks/useTvSocket';
-import { carouselReducer, initCarousel, type CarouselSlide } from '@/lib/carousel';
-import type { CelebrationPayload } from '@/lib/ws/protocol';
+import { carouselReducer, initCarousel, type CarouselSlide, type QueuedCelebration } from '@/lib/carousel';
 import type { TvStateResponse } from '@/lib/types';
 import PairingScreen from '@/components/tv/PairingScreen';
 import StartOverlay from '@/components/tv/StartOverlay';
@@ -45,7 +44,9 @@ export default function TvApp() {
   // Celebrations that arrive before the viewer has unlocked audio (StartOverlay still
   // showing): browsers block autoplay with sound pre-gesture, so we can't play the
   // anthem yet. Buffer them here and flush into the reducer's FIFO queue once unlocked.
-  const pendingCelebrations = useRef<CelebrationPayload[]>([]);
+  const pendingCelebrations = useRef<QueuedCelebration[]>([]);
+
+  const celebrationSeq = useRef(0);
 
   // Discards stale /api/tv/state responses that resolve out of order (e.g. a slow
   // response from an earlier refresh landing after a newer one already completed).
@@ -77,11 +78,16 @@ export default function TvApp() {
 
   const socket = useTvSocket({
     onCelebration: (payload) => {
+      // clientId: locally generated stable mount key — the same sale replayed
+      // twice still remounts the overlay (saleId alone could not tell them apart).
+      // Counter ref, not crypto.randomUUID(): TVs open /tv over plain LAN http
+      // (non-secure context) where crypto.randomUUID is unavailable.
+      const queued: QueuedCelebration = { ...payload, clientId: `c${++celebrationSeq.current}` };
       if (!audioUnlockedRef.current) {
-        pendingCelebrations.current.push(payload);
+        pendingCelebrations.current.push(queued);
         return;
       }
-      dispatch({ type: 'celebration', payload });
+      dispatch({ type: 'celebration', payload: queued });
     },
     onDataUpdated: () => {
       void refreshState();
@@ -206,7 +212,7 @@ export default function TvApp() {
       <AnimatePresence>
         {carousel.mode === 'celebrate' && carousel.current ? (
           <CelebrationOverlay
-            key={carousel.current.saleId}
+            key={carousel.current.clientId}
             payload={carousel.current}
             volume={tvState ? tvState.settings.volume : 0.8}
             onDone={handleCelebrationDone}

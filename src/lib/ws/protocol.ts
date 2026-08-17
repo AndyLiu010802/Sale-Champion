@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { TvScreenInfo } from '../types';
 
-export type CelebrationPayload = {
+export type SaleCelebration = {
+  kind: 'sale';
   saleId: string;
   agentName: string;
   agentPhotoUrl: string | null;
@@ -10,6 +11,16 @@ export type CelebrationPayload = {
   anthemUrl: string | null;   // 已解析:agent.anthemUrl ?? settings.defaultAnthemUrl(可能为 builtin:xxx 或文件 URL)
   durationSec: number;
 };
+
+export type BirthdayCelebration = {
+  kind: 'birthday';
+  agentId: string;
+  name: string;
+  photoUrl: string | null;
+  durationSec: number;
+};
+
+export type CelebrationPayload = SaleCelebration | BirthdayCelebration;
 
 export type DataDomain = 'sales' | 'listings' | 'goals' | 'announcements' | 'agents';
 
