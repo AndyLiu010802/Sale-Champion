@@ -42,7 +42,7 @@ async function pairTv(browser: import('@playwright/test').Browser, screenName: s
   await adminPage.getByLabel(/code/i).fill(pairCode);
   await adminPage.getByLabel(/tv name/i).fill(screenName);
   await adminPage.getByRole('button', { name: 'Pair TV' }).click();
-  await expect(adminPage.getByText(screenName)).toBeVisible({ timeout: 10000 });
+  await expect(adminPage.getByText(screenName, { exact: true })).toBeVisible({ timeout: 10000 });
 
   // 4. TV shows the audio-unlock overlay; click it to enter the carousel.
   const startBtn = tvPage.getByText('CLICK TO START');
