@@ -98,6 +98,57 @@ describe('PATCH /api/agents/[id]', () => {
     expect(await res.json()).toEqual({ error: 'Not found' });
     expect(events).toEqual([]);
   });
+
+  it('partial PATCH leaves other nullable fields untouched', async () => {
+    const created = await POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Dana Lee', photoUrl: 'https://example.com/dana.jpg', anthemUrl: 'builtin:hero' },
+      }),
+    );
+    const { data: agent } = await created.json();
+
+    const res = await PATCH(
+      await authedRequest(`/api/agents/${agent.id}`, { method: 'PATCH', body: { name: 'Dana L.' } }),
+      { params: Promise.resolve({ id: agent.id }) },
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.name).toBe('Dana L.');
+    expect(data.photoUrl).toBe('https://example.com/dana.jpg');
+    expect(data.anthemUrl).toBe('builtin:hero');
+  });
+
+  it('explicit null clears a previously-set nullable field', async () => {
+    const created = await POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Eli Park', photoUrl: 'https://example.com/eli.jpg', anthemUrl: 'builtin:hero' },
+      }),
+    );
+    const { data: agent } = await created.json();
+
+    const res = await PATCH(
+      await authedRequest(`/api/agents/${agent.id}`, { method: 'PATCH', body: { photoUrl: null } }),
+      { params: Promise.resolve({ id: agent.id }) },
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.photoUrl).toBeNull();
+    expect(data.anthemUrl).toBe('builtin:hero');
+  });
+
+  it('empty-body PATCH returns 200 without broadcasting', async () => {
+    const res = await PATCH(
+      await authedRequest(`/api/agents/${basics.agentId}`, { method: 'PATCH', body: {} }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.id).toBe(basics.agentId);
+    expect(data.name).toBe('Alice Ng');
+    expect(events).toEqual([]);
+  });
 });
 
 describe('DELETE /api/agents/[id]', () => {
