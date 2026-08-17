@@ -5,6 +5,7 @@ import { getHub } from '@/lib/ws/hub';
 import type { ServerEvent } from '@/lib/ws/protocol';
 import { GET, POST } from '@/app/api/agents/route';
 import { PATCH, DELETE } from '@/app/api/agents/[id]/route';
+import { POST as BIRTHDAY_BROADCAST } from '@/app/api/agents/[id]/birthday-broadcast/route';
 
 let basics: Basics;
 let events: ServerEvent[];
@@ -273,6 +274,90 @@ describe('role & birthday', () => {
       { params: Promise.resolve({ id: basics.agentId }) },
     );
     expect(res.status).toBe(400);
+    expect(events).toEqual([]);
+  });
+});
+
+describe('POST /api/agents/[id]/birthday-broadcast', () => {
+  it('requires admin session', async () => {
+    const res = await BIRTHDAY_BROADCAST(
+      jsonRequest(`/api/agents/${basics.agentId}/birthday-broadcast`, { method: 'POST' }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(res.status).toBe(401);
+    expect(events).toEqual([]);
+  });
+
+  it('broadcasts a birthday celebration payload for an agent', async () => {
+    const res = await BIRTHDAY_BROADCAST(
+      await authedRequest(`/api/agents/${basics.agentId}/birthday-broadcast`, { method: 'POST' }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ data: { ok: true } });
+    expect(events).toEqual([
+      {
+        type: 'celebration.play',
+        celebration: {
+          kind: 'birthday',
+          agentId: basics.agentId,
+          name: 'Alice Ng',
+          photoUrl: null,
+          durationSec: 18,
+        },
+      },
+    ]);
+  });
+
+  it('broadcasts for staff members too, regardless of birthday value', async () => {
+    const created = await POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Sam Staff', role: 'staff', photoUrl: 'https://example.com/sam.jpg' },
+      }),
+    );
+    const { data: staff } = await created.json();
+    events.length = 0;
+
+    const res = await BIRTHDAY_BROADCAST(
+      await authedRequest(`/api/agents/${staff.id}/birthday-broadcast`, { method: 'POST' }),
+      { params: Promise.resolve({ id: staff.id }) },
+    );
+    expect(res.status).toBe(200);
+    expect(events).toHaveLength(1);
+    const first = events[0];
+    if (first.type !== 'celebration.play') throw new Error('expected celebration.play');
+    if (first.celebration.kind !== 'birthday') throw new Error('expected birthday celebration');
+    expect(first.celebration.agentId).toBe(staff.id);
+    expect(first.celebration.name).toBe('Sam Staff');
+    expect(first.celebration.photoUrl).toBe('https://example.com/sam.jpg');
+    expect(first.celebration.durationSec).toBe(18);
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const res = await BIRTHDAY_BROADCAST(
+      await authedRequest('/api/agents/ghost/birthday-broadcast', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'ghost' }) },
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Not found' });
+    expect(events).toEqual([]);
+  });
+
+  it('returns 404 for an inactive member', async () => {
+    const del = await DELETE(
+      await authedRequest(`/api/agents/${basics.agentId}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(del.status).toBe(200);
+    events.length = 0;
+
+    const res = await BIRTHDAY_BROADCAST(
+      await authedRequest(`/api/agents/${basics.agentId}/birthday-broadcast`, { method: 'POST' }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Not found' });
     expect(events).toEqual([]);
   });
 });
