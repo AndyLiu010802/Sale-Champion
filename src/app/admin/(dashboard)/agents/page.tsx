@@ -229,7 +229,7 @@ export default function AgentsPage() {
                 type="checkbox"
                 checked={a.active}
                 onChange={() => toggleActive(a)}
-                disabled={togglingId === a.id}
+                disabled={togglingId !== null}
                 className="h-4 w-4 accent-neon disabled:cursor-not-allowed disabled:opacity-50"
               />
             </td>
