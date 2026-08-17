@@ -5,6 +5,7 @@ import { getHub } from '@/lib/ws/hub';
 import type { ServerEvent } from '@/lib/ws/protocol';
 import { GET, POST } from '@/app/api/listings/route';
 import { PATCH, DELETE } from '@/app/api/listings/[id]/route';
+import { DELETE as AGENTS_DELETE } from '@/app/api/agents/[id]/route';
 
 let basics: Basics;
 let events: ServerEvent[];
@@ -25,6 +26,29 @@ const listingBody = () => ({
   address: '7 Harbour St',
   listPriceCents: 120000000,
   listedDate: '2026-08-10',
+});
+
+describe('auth', () => {
+  it('all listings endpoints require auth', async () => {
+    expect((await GET(jsonRequest('/api/listings'))).status).toBe(401);
+    expect(
+      (await POST(jsonRequest('/api/listings', { method: 'POST', body: listingBody() }))).status,
+    ).toBe(401);
+    expect(
+      (
+        await PATCH(jsonRequest('/api/listings/x', { method: 'PATCH', body: { status: 'sold' } }), {
+          params: Promise.resolve({ id: 'x' }),
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await DELETE(jsonRequest('/api/listings/x', { method: 'DELETE' }), {
+          params: Promise.resolve({ id: 'x' }),
+        })
+      ).status,
+    ).toBe(401);
+  });
 });
 
 describe('POST /api/listings', () => {
@@ -49,6 +73,20 @@ describe('POST /api/listings', () => {
         body: { ...listingBody(), agentId: 'ghost' },
       }),
     );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Unknown agent' });
+    expect(events).toEqual([]);
+  });
+
+  it('rejects listings for inactive agents', async () => {
+    const delRes = await AGENTS_DELETE(
+      await authedRequest(`/api/agents/${basics.agentId}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(delRes.status).toBe(200);
+    events.length = 0;
+
+    const res = await POST(await authedRequest('/api/listings', { method: 'POST', body: listingBody() }));
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'Unknown agent' });
     expect(events).toEqual([]);

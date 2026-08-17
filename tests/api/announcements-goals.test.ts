@@ -24,6 +24,60 @@ beforeEach(async () => {
   );
 });
 
+describe('auth', () => {
+  it('all announcements and goals endpoints require auth', async () => {
+    expect((await listAnnouncements(jsonRequest('/api/announcements'))).status).toBe(401);
+    expect(
+      (
+        await createAnnouncement(
+          jsonRequest('/api/announcements', { method: 'POST', body: { title: 'x' } }),
+        )
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await patchAnnouncement(
+          jsonRequest('/api/announcements/x', { method: 'PATCH', body: { enabled: false } }),
+          { params: Promise.resolve({ id: 'x' }) },
+        )
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await deleteAnnouncement(jsonRequest('/api/announcements/x', { method: 'DELETE' }), {
+          params: Promise.resolve({ id: 'x' }),
+        })
+      ).status,
+    ).toBe(401);
+
+    expect((await listGoals(jsonRequest('/api/goals'))).status).toBe(401);
+    expect(
+      (
+        await createGoal(
+          jsonRequest('/api/goals', {
+            method: 'POST',
+            body: { metric: 'gci', targetValue: 1, period: 'month' },
+          }),
+        )
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await patchGoal(jsonRequest('/api/goals/x', { method: 'PATCH', body: { active: false } }), {
+          params: Promise.resolve({ id: 'x' }),
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await deleteGoal(jsonRequest('/api/goals/x', { method: 'DELETE' }), {
+          params: Promise.resolve({ id: 'x' }),
+        })
+      ).status,
+    ).toBe(401);
+  });
+});
+
 describe('announcements', () => {
   it('requires admin session', async () => {
     const res = await listAnnouncements(jsonRequest('/api/announcements'));
