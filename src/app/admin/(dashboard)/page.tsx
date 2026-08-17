@@ -106,6 +106,7 @@ export default function DashboardPage() {
 
   function openEdit(sale: SaleRow) {
     setEditing(sale);
+    setError(null);
     setEditForm({
       agentId: sale.agentId,
       address: sale.address,
