@@ -153,6 +153,21 @@ describe('computeLeaderboard', () => {
     expect(rows[9]).toMatchObject({ agentId: 'a03', value: 300_000, rank: 10 });
     expect(rows.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
+
+  it('ignores sales from agents missing in the inputs but still counts them in totals', () => {
+    const inputs: LeaderboardInputs = {
+      agents: [agent('a', 'Alice')],
+      sales: [
+        sale('a', 100_000, '2026-08-05'),
+        sale('ghost', 200_000, '2026-08-06'), // agentId not present in inputs.agents
+      ],
+      listings: [],
+    };
+    const rows = computeLeaderboard(inputs, 'gci', AUG);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ agentId: 'a', value: 100_000 });
+    expect(computeMetricTotal(inputs, 'gci', AUG)).toBe(300_000);
+  });
 });
 
 describe('computeMetricTotal', () => {

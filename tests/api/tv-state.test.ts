@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshDb, seedBasics, type Basics } from '../helpers/db';
-import { jsonRequest } from '../helpers/request';
+import { jsonRequest, authedRequest } from '../helpers/request';
 import type { Db } from '@/lib/db';
 import { agents, announcements, goals, listings, sales, screens } from '@/lib/db/schema';
 import { generateDeviceToken, hashToken } from '@/lib/domain/pairing';
 import { periodLabel } from '@/lib/domain/periods';
 import { GET as tvStateGet } from '@/app/api/tv/state/route';
+import { PATCH as AGENTS_PATCH } from '@/app/api/agents/[id]/route';
 
 function localDateStr(d: Date): string {
   const y = d.getFullYear();
@@ -144,5 +145,37 @@ describe('GET /api/tv/state', () => {
     }
     // Alice (role agent) still ranks normally.
     expect(data.leaderboards.sales_count[0]).toMatchObject({ agentId: basics.agentId, value: 1 });
+  });
+
+  it('a demoted agent disappears from leaderboards but keeps counting toward goals', async () => {
+    const today = localDateStr(new Date());
+    const bobId = crypto.randomUUID();
+    await db.insert(agents).values({ id: bobId, orgId: basics.orgId, name: 'Bob Ray' });
+    await db.insert(sales).values({
+      id: crypto.randomUUID(), orgId: basics.orgId, agentId: bobId, address: '9 High St',
+      salePriceCents: 70000000, gciCents: 300000, saleDate: today,
+    });
+
+    const patchRes = await AGENTS_PATCH(
+      await authedRequest(`/api/agents/${bobId}`, { method: 'PATCH', body: { role: 'staff' } }),
+      { params: Promise.resolve({ id: bobId }) },
+    );
+    expect(patchRes.status).toBe(200);
+    const { data: patched } = await patchRes.json();
+    expect(patched.role).toBe('staff');
+
+    await db.insert(goals).values({
+      id: crypto.randomUUID(), orgId: basics.orgId, metric: 'gci', targetValue: 1000000, period: 'month', active: true,
+    });
+
+    const res = await tvStateGet(stateRequest(token));
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    for (const metric of ['sales_count', 'gci', 'listings'] as const) {
+      expect(
+        data.leaderboards[metric].some((e: { agentId: string }) => e.agentId === bobId),
+      ).toBe(false);
+    }
+    expect(data.goals[0].currentValue).toBe(300000);
   });
 });
