@@ -35,6 +35,12 @@ export async function seed(db: Db, opts: { demo?: boolean } = {}): Promise<{ org
 
   // Admin user: upsert by ADMIN_EMAIL (defaults match .env.example).
   const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@example.com';
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn(
+      '[seed] WARNING: ADMIN_PASSWORD not set — using the default password "admin1234". ' +
+      'Set ADMIN_PASSWORD in .env before deploying to production.',
+    );
+  }
   const adminPassword = process.env.ADMIN_PASSWORD ?? 'admin1234';
   const passwordHash = await bcrypt.hash(adminPassword, 10);
   const existingAdmin = await db.select().from(users).where(eq(users.email, adminEmail));
