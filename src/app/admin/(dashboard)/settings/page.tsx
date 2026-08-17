@@ -20,18 +20,42 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  async function loadSettings() {
+    try {
+      const res = await fetch('/api/settings');
+      if (!res.ok) {
+        setLoadError(true);
+        return;
+      }
+      const body = (await res.json()) as { data: SettingsData };
+      setSettings(body.data);
+    } catch {
+      setLoadError(true);
+    }
+  }
 
   useEffect(() => {
-    void (async () => {
-      const res = await fetch('/api/settings');
-      if (res.ok) {
-        const body = (await res.json()) as { data: SettingsData };
-        setSettings(body.data);
-      }
-    })();
+    void loadSettings();
   }, []);
 
-  if (!settings) return <p className="text-muted">Loading…</p>;
+  function retryLoad() {
+    setLoadError(false);
+    void loadSettings();
+  }
+
+  if (!settings) {
+    if (loadError) {
+      return (
+        <div>
+          <p className="mb-3 text-sm text-red-400">Failed to load settings.</p>
+          <Button onClick={retryLoad}>Retry</Button>
+        </div>
+      );
+    }
+    return <p className="text-muted">Loading…</p>;
+  }
 
   // Capture a non-null alias in this scope: TypeScript's control-flow narrowing
   // of `settings` from the early return above does not persist into the nested
