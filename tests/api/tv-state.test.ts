@@ -122,4 +122,27 @@ describe('GET /api/tv/state', () => {
     expect(data.goals[0].currentValue).toBe(3);
     expect(data.goals[0].percent).toBe(100); // 150% capped
   });
+
+  it('excludes staff from every leaderboard', async () => {
+    const today = localDateStr(new Date());
+    const staffId = crypto.randomUUID();
+    await db.insert(agents).values({
+      id: staffId, orgId: basics.orgId, name: 'Sam Staff', role: 'staff', birthday: '08-18',
+    });
+    await db.insert(sales).values({
+      id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, address: '1 Main St',
+      salePriceCents: 50000000, gciCents: 100000, saleDate: today,
+    });
+
+    const res = await tvStateGet(stateRequest(token));
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    for (const metric of ['sales_count', 'gci', 'listings'] as const) {
+      expect(
+        data.leaderboards[metric].some((e: { agentId: string }) => e.agentId === staffId),
+      ).toBe(false);
+    }
+    // Alice (role agent) still ranks normally.
+    expect(data.leaderboards.sales_count[0]).toMatchObject({ agentId: basics.agentId, value: 1 });
+  });
 });

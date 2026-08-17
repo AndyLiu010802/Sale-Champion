@@ -5,11 +5,14 @@ import { getOrgId } from '@/lib/db/org';
 import { agents } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/session';
 import { getHub } from '@/lib/ws/hub';
+import { BIRTHDAY_RE } from '@/lib/domain/birthday';
 
 const createSchema = z.object({
   name: z.string().min(1),
   photoUrl: z.string().min(1).optional(),
   anthemUrl: z.string().min(1).optional(),
+  role: z.enum(['agent', 'staff']).optional(),
+  birthday: z.string().regex(BIRTHDAY_RE).optional(),
 });
 
 export async function GET(req: Request) {
@@ -51,6 +54,8 @@ export async function POST(req: Request) {
       name: parsed.data.name,
       photoUrl: parsed.data.photoUrl ?? null,
       anthemUrl: parsed.data.anthemUrl ?? null,
+      role: parsed.data.role ?? 'agent',
+      birthday: parsed.data.birthday ?? null,
     })
     .returning();
   getHub().broadcast({ type: 'data.updated', domain: 'agents' });

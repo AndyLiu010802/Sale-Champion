@@ -25,7 +25,11 @@ export async function GET(req: Request): Promise<Response> {
   const now = new Date();
   const settings = await getSettings(db, orgId);
 
-  const agentRows = await db.select().from(agents).where(eq(agents.orgId, orgId));
+  // Staff never enter the leaderboards. Sales/listings rows can only reference
+  // role='agent' members (enforced by their APIs), so computeMetricTotal's
+  // team-wide goal totals need no extra role filtering here.
+  const agentRows = await db.select().from(agents)
+    .where(and(eq(agents.orgId, orgId), eq(agents.role, 'agent')));
   const saleRows = await db.select().from(sales).where(eq(sales.orgId, orgId));
   const listingRows = await db.select().from(listings).where(eq(listings.orgId, orgId));
 

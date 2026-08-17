@@ -5,6 +5,7 @@ import { getHub } from '@/lib/ws/hub';
 import type { ServerEvent } from '@/lib/ws/protocol';
 import { GET, POST } from '@/app/api/listings/route';
 import { PATCH, DELETE } from '@/app/api/listings/[id]/route';
+import { POST as AGENTS_POST } from '@/app/api/agents/route';
 import { DELETE as AGENTS_DELETE } from '@/app/api/agents/[id]/route';
 
 let basics: Basics;
@@ -167,5 +168,54 @@ describe('DELETE /api/listings/[id]', () => {
     const list = await (await GET(await authedRequest('/api/listings'))).json();
     expect(list.data).toHaveLength(0);
     expect(events).toEqual([{ type: 'data.updated', domain: 'listings' }]);
+  });
+});
+
+describe('role guard: staff cannot hold listings', () => {
+  it('rejects creating a listing for a staff member with 400 Unknown agent', async () => {
+    const staffRes = await AGENTS_POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Sam Staff', role: 'staff' },
+      }),
+    );
+    expect(staffRes.status).toBe(200);
+    const { data: staff } = await staffRes.json();
+    events.length = 0;
+
+    const res = await POST(
+      await authedRequest('/api/listings', {
+        method: 'POST',
+        body: { ...listingBody(), agentId: staff.id },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Unknown agent' });
+    expect(events).toEqual([]);
+  });
+
+  it('rejects reassigning a listing to a staff member with 400 Unknown agent', async () => {
+    const created = await (
+      await POST(await authedRequest('/api/listings', { method: 'POST', body: listingBody() }))
+    ).json();
+    const staffRes = await AGENTS_POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Sam Staff', role: 'staff' },
+      }),
+    );
+    const { data: staff } = await staffRes.json();
+    events.length = 0;
+
+    const res = await PATCH(
+      await authedRequest(`/api/listings/${created.data.id}`, {
+        method: 'PATCH',
+        body: { agentId: staff.id },
+      }),
+      { params: Promise.resolve({ id: created.data.id }) },
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Unknown agent' });
+    expect(events).toEqual([]);
   });
 });

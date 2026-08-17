@@ -5,12 +5,15 @@ import { getOrgId } from '@/lib/db/org';
 import { agents } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/session';
 import { getHub } from '@/lib/ws/hub';
+import { BIRTHDAY_RE } from '@/lib/domain/birthday';
 
 const patchSchema = z.object({
   name: z.string().min(1).optional(),
   photoUrl: z.string().min(1).nullable().optional(),
   anthemUrl: z.string().min(1).nullable().optional(),
   active: z.boolean().optional(),
+  role: z.enum(['agent', 'staff']).optional(),
+  birthday: z.string().regex(BIRTHDAY_RE).nullable().optional(),
 });
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {

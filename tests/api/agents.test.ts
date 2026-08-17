@@ -177,3 +177,102 @@ describe('DELETE /api/agents/[id]', () => {
     expect(events).toEqual([]);
   });
 });
+
+describe('role & birthday', () => {
+  it('creates a staff member with a birthday and returns both fields', async () => {
+    const res = await POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Fay Ops', role: 'staff', birthday: '08-18' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.role).toBe('staff');
+    expect(data.birthday).toBe('08-18');
+  });
+
+  it('defaults role to agent and birthday to null', async () => {
+    const res = await POST(
+      await authedRequest('/api/agents', { method: 'POST', body: { name: 'Gil Doe' } }),
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.role).toBe('agent');
+    expect(data.birthday).toBeNull();
+  });
+
+  it('rejects invalid birthday formats with 400', async () => {
+    for (const birthday of ['8-18', '13-01', '00-10', '01-32', '0818']) {
+      const res = await POST(
+        await authedRequest('/api/agents', {
+          method: 'POST',
+          body: { name: 'Bad Birthday', birthday },
+        }),
+      );
+      expect(res.status).toBe(400);
+    }
+    expect(events).toEqual([]);
+  });
+
+  it('rejects an invalid role with 400', async () => {
+    const res = await POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Bad Role', role: 'manager' },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(events).toEqual([]);
+  });
+
+  it('accepts 02-31 (regex-level validation only, by design)', async () => {
+    const res = await POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Loose Day', birthday: '02-31' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.birthday).toBe('02-31');
+  });
+
+  it('PATCH updates role and birthday, and null clears birthday', async () => {
+    const patched = await PATCH(
+      await authedRequest(`/api/agents/${basics.agentId}`, {
+        method: 'PATCH',
+        body: { role: 'staff', birthday: '12-31' },
+      }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(patched.status).toBe(200);
+    const { data } = await patched.json();
+    expect(data.role).toBe('staff');
+    expect(data.birthday).toBe('12-31');
+
+    const cleared = await PATCH(
+      await authedRequest(`/api/agents/${basics.agentId}`, {
+        method: 'PATCH',
+        body: { birthday: null },
+      }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(cleared.status).toBe(200);
+    const { data: after } = await cleared.json();
+    expect(after.birthday).toBeNull();
+    expect(after.role).toBe('staff');
+  });
+
+  it('PATCH rejects an invalid birthday with 400', async () => {
+    const res = await PATCH(
+      await authedRequest(`/api/agents/${basics.agentId}`, {
+        method: 'PATCH',
+        body: { birthday: '2-3' },
+      }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(res.status).toBe(400);
+    expect(events).toEqual([]);
+  });
+});

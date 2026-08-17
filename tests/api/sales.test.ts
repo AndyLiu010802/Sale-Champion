@@ -283,3 +283,53 @@ describe('buildBirthdayPayload', () => {
     expect(payload.durationSec).toBe(13);
   });
 });
+
+describe('role guard: staff cannot transact', () => {
+  it('rejects creating a sale for a staff member with 400 Unknown agent', async () => {
+    const staffRes = await AGENTS_POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Sam Staff', role: 'staff' },
+      }),
+    );
+    expect(staffRes.status).toBe(200);
+    const { data: staff } = await staffRes.json();
+    expect(staff.role).toBe('staff');
+    events.length = 0;
+
+    const res = await POST(
+      await authedRequest('/api/sales', {
+        method: 'POST',
+        body: { ...saleBody(), agentId: staff.id },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Unknown agent' });
+    expect(events).toEqual([]);
+  });
+
+  it('rejects reassigning a sale to a staff member with 400 Unknown agent', async () => {
+    const created = await (
+      await POST(await authedRequest('/api/sales', { method: 'POST', body: saleBody() }))
+    ).json();
+    const staffRes = await AGENTS_POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Sam Staff', role: 'staff' },
+      }),
+    );
+    const { data: staff } = await staffRes.json();
+    events.length = 0;
+
+    const res = await PATCH(
+      await authedRequest(`/api/sales/${created.data.id}`, {
+        method: 'PATCH',
+        body: { agentId: staff.id },
+      }),
+      { params: Promise.resolve({ id: created.data.id }) },
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Unknown agent' });
+    expect(events).toEqual([]);
+  });
+});
