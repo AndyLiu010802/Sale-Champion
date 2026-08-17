@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Brainstorming companion sessions
+.superpowers/
+
+# Local file storage (dev uploads)
+storage/
+
+# Misc
+*.log
+.DS_Store
