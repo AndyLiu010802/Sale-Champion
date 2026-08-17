@@ -1,21 +1,15 @@
-# Dependencies
 node_modules/
-
-# Next.js build output
 .next/
 out/
-
-# Environment
+.data/
+storage/
+next-env.d.ts
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
-
-# Brainstorming companion sessions
 .superpowers/
-
-# Local file storage (dev uploads)
-storage/
-
-# Misc
+test-results/
+playwright-report/
 *.log
 .DS_Store
