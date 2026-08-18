@@ -4,17 +4,63 @@ loadEnvConfig(process.cwd());
 import http from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { and, eq } from 'drizzle-orm';
-import { getDb } from '@/lib/db';
-import { screens } from '@/lib/db/schema';
-import { getHub } from '@/lib/ws/hub';
+import { and, asc, eq } from 'drizzle-orm';
+import { getDb, type Db } from '@/lib/db';
+import { getOrgId } from '@/lib/db/org';
+import { agents, orgs, screens } from '@/lib/db/schema';
+import { getHub, type Hub } from '@/lib/ws/hub';
 import { clientEventSchema, type ClientEvent } from '@/lib/ws/protocol';
 import { hashToken, isPairCodeExpired } from '@/lib/domain/pairing';
+import { isElevenAm, localMmdd, localYmd } from '@/lib/domain/birthday';
+import { getSettings } from '@/lib/settings';
+import { buildBirthdayPayload } from '@/lib/domain/celebration';
 
 // Env-dependent code below reads process.env lazily (inside functions), so the
 // hoisted imports above finishing before loadEnvConfig runs is safe.
 
 const HELLO_TIMEOUT_MS = 5000;
+
+/**
+ * One scheduler tick, exported for direct testing. At 11:00 local time
+ * (deployment TZ), broadcasts a birthday celebration for every active member
+ * (agent or staff) whose birthday (MM-DD) is today — at most once per day.
+ * The dedupe mark is written to orgs BEFORE broadcasting: if the process
+ * dies in between we lose one broadcast rather than ever replaying it,
+ * and a restart within the same minute stays idempotent.
+ */
+export async function runBirthdayTick(db: Db, hub: Hub, now: Date): Promise<void> {
+  if (!isElevenAm(now)) return;
+  const today = localYmd(now);
+  const orgId = await getOrgId(db);
+  const [org] = await db.select().from(orgs).where(eq(orgs.id, orgId));
+  if (!org || org.lastBirthdayBroadcastDate === today) return;
+
+  const celebrants = await db
+    .select()
+    .from(agents)
+    .where(and(
+      eq(agents.orgId, orgId),
+      eq(agents.active, true),
+      eq(agents.birthday, localMmdd(now)),
+    ))
+    .orderBy(asc(agents.name));
+  if (celebrants.length === 0) return; // no celebrants → leave the mark unset
+
+  await db.update(orgs)
+    .set({ lastBirthdayBroadcastDate: today })
+    .where(eq(orgs.id, orgId));
+
+  const settings = await getSettings(db, orgId);
+  for (const member of celebrants) {
+    hub.broadcast({
+      type: 'celebration.play',
+      celebration: buildBirthdayPayload(
+        { id: member.id, name: member.name, photoUrl: member.photoUrl },
+        settings,
+      ),
+    });
+  }
+}
 
 export async function startServer(
   port: number,
@@ -158,6 +204,11 @@ export async function startServer(
       socket.destroy();
     }
   });
+
+  const birthdayTimer = setInterval(() => {
+    runBirthdayTick(db, getHub(), new Date()).catch((err) => console.error('[birthday] tick failed:', err));
+  }, 60_000);
+  server.on('close', () => clearInterval(birthdayTimer));
 
   await new Promise<void>((resolve) => server.listen(port, resolve));
   return server;
