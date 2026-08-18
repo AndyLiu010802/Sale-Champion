@@ -73,7 +73,8 @@ export async function GET(req: Request): Promise<Response> {
     .innerJoin(agents, eq(listings.agentId, agents.id))
     .where(and(eq(listings.orgId, orgId), eq(listings.status, 'active')))
     .orderBy(desc(listings.listedDate))
-    .limit(8);
+    // 安全封顶:电视端分页后全量展示,40 仅防极端数据撑爆载荷(设计 §4)。
+    .limit(40);
 
   const annRows = await db.select().from(announcements)
     .where(and(eq(announcements.orgId, orgId), eq(announcements.enabled, true)))

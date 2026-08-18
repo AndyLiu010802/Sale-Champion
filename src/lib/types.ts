@@ -37,7 +37,7 @@ export type TvStateResponse = {
   settings: SettingsData;
   leaderboards: Record<Metric, LeaderboardEntry[]>;  // all three metrics
   goals: GoalProgress[];                              // active only
-  listings: TvListing[];                              // status='active', listedDate desc, limit 8
+  listings: TvListing[];                              // status='active', listedDate desc, limit 40
   announcements: TvAnnouncement[];                    // enabled only, sortOrder asc
   periodLabel: string;                                // periodLabel(settings.leaderboardPeriod, now)
 };

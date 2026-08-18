@@ -65,6 +65,9 @@ function cmp(a: number, b: number): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/** 安全封顶:电视端分页后全量展示,50 仅防极端数据撑爆载荷(设计 §4)。 */
+export const LEADERBOARD_LIMIT = 50;
+
 export function computeLeaderboard(inputs: LeaderboardInputs, metric: Metric, range: Range): LeaderboardEntry[] {
   const stats = collectStats(inputs, range);
   const rows = inputs.agents
@@ -82,7 +85,7 @@ export function computeLeaderboard(inputs: LeaderboardInputs, metric: Metric, ra
     || (x.agent.name < y.agent.name ? -1 : x.agent.name > y.agent.name ? 1 : 0), // name asc
   );
 
-  return rows.slice(0, 10).map((r, i) => ({
+  return rows.slice(0, LEADERBOARD_LIMIT).map((r, i) => ({
     agentId: r.agent.id,
     name: r.agent.name,
     photoUrl: r.agent.photoUrl,

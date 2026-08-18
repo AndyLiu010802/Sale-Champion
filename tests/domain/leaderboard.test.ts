@@ -139,7 +139,7 @@ describe('computeLeaderboard', () => {
     expect(rows[0]!.value).toBe(1);
   });
 
-  it('truncates to top 10 with ranks 1..10', () => {
+  it('keeps every qualifying agent below the 50 cap (12 agents all appear)', () => {
     const agents = [];
     const salesRows = [];
     for (let i = 1; i <= 12; i++) {
@@ -148,10 +148,24 @@ describe('computeLeaderboard', () => {
       salesRows.push(sale(id, i * 100_000, '2026-08-05'));
     }
     const rows = computeLeaderboard({ agents, sales: salesRows, listings: [] }, 'gci', AUG);
-    expect(rows).toHaveLength(10);
+    expect(rows).toHaveLength(12);
     expect(rows[0]).toMatchObject({ agentId: 'a12', value: 1_200_000, rank: 1 });
-    expect(rows[9]).toMatchObject({ agentId: 'a03', value: 300_000, rank: 10 });
-    expect(rows.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(rows[11]).toMatchObject({ agentId: 'a01', value: 100_000, rank: 12 });
+    expect(rows.map((r) => r.rank)).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
+  });
+
+  it('caps the board at 50 entries (safety cap, TV paginates client-side)', () => {
+    const agents = [];
+    const salesRows = [];
+    for (let i = 1; i <= 55; i++) {
+      const id = `a${String(i).padStart(2, '0')}`;
+      agents.push(agent(id, `Agent ${String(i).padStart(2, '0')}`));
+      salesRows.push(sale(id, i * 100_000, '2026-08-05'));
+    }
+    const rows = computeLeaderboard({ agents, sales: salesRows, listings: [] }, 'gci', AUG);
+    expect(rows).toHaveLength(50);
+    expect(rows[0]).toMatchObject({ agentId: 'a55', rank: 1 });
+    expect(rows[49]).toMatchObject({ agentId: 'a06', rank: 50 });
   });
 
   it('ignores sales from agents missing in the inputs but still counts them in totals', () => {
