@@ -49,7 +49,7 @@ See `.env.example` for the authoritative list:
 | Variable | Purpose |
 |---|---|
 | `PORT` | HTTP port (default `3000`) |
-| `TZ` | Server timezone used for leaderboard periods, e.g. `Australia/Sydney` |
+| `TZ` | Server timezone used for leaderboard periods, e.g. `Australia/Sydney`; also sets the 11:00 birthday-broadcast trigger time. |
 | `SESSION_SECRET` | Secret for admin session cookies — random, at least 32 chars |
 | `DATABASE_URL` | PostgreSQL connection string; leave unset to use embedded PGlite (dev) |
 | `PGLITE_MEMORY` | `1` = in-memory database (tests only) |
