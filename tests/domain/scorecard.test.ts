@@ -10,7 +10,7 @@ const agent = (id: string, name: string, role: 'agent' | 'staff' = 'agent', acti
   ({ id, name, role, active });
 const sale = (agentId: string, gciCents: number, saleDate: string, split = 1) =>
   ({ agentId, gciCents, saleDate, split });
-const listing = (agentId: string, listedDate: string) => ({ agentId, listedDate });
+const listing = (agentId: string, listedDate: string, split = 1) => ({ agentId, listedDate, split });
 const appraisal = (agentId: string, date: string, count = 1) => ({ agentId, date, count });
 
 describe('computeScorecard', () => {
@@ -135,6 +135,19 @@ describe('computeScorecard', () => {
       sales: 0, split: 0, gciCents: 0, conversionPct: 0,
     }]);
     expect(totals.gciCents).toBe(0);
+  });
+
+  it('sums fractional listing splits into the listings column and the conversion numerator (设计 §7b)', () => {
+    const inputs: ScorecardInputs = {
+      agents: [agent('h', 'Hill & Co')],
+      sales: [],
+      listings: [listing('h', '2026-08-03'), listing('h', '2026-08-04', 0.66)],
+      appraisals: [appraisal('h', '2026-08-02', 13)],
+    };
+    const { rows, totals } = computeScorecard(inputs, AUG);
+    // Σ = 1.66 → 列值 1 位小数 1.7;conversion 分子用未舍入的 1.66:1.66/13×100 → 12.8
+    expect(rows[0]).toMatchObject({ listings: 1.7, conversionPct: 12.8 });
+    expect(totals.listings).toBe(1.7);
   });
 
   it('agrees with the leaderboard sales metric after display rounding', () => {

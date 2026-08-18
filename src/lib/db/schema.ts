@@ -55,6 +55,9 @@ export const listings = pgTable('listings', {
   photoUrl: text('photo_url'),
   listedDate: date('listed_date', { mode: 'string' }).notNull(),
   status: text('status').notNull().default('active'), // 'active' | 'sold' | 'withdrawn'
+  // 房源拆分份额(设计 §7b):0 < split ≤ 1(zod 层校验);listings 指标与转化率分子 = Σsplit;
+  // 既有行走 DEFAULT 1(整单)。
+  split: doublePrecision('split').notNull().default(1),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -168,8 +168,9 @@ export default function TvApp() {
       goal_progress: 1,
       listings: gridPageSize(windowHeight - SLIDE_RESERVED_PX, LISTINGS_ROW_PX, LISTINGS_COLUMNS),
       announcements: pageSize(windowHeight - SLIDE_RESERVED_PX, ANNOUNCEMENT_ITEM_PX),
-      // 过渡态(Task 3):Task 4 换成按 Scorecard 行高/预留计算的真实容量。
+      // 过渡态(Task 3/3b):Task 4 换成按 Scorecard 行高/预留计算的真实容量。
       scorecard: 1,
+      scorecard_ytd: 1,
     };
   }, [windowHeight]);
 
@@ -184,8 +185,9 @@ export default function TvApp() {
       goal_progress: 1, // 恒 1 页;GoalSlide 自身 slice(0,4) 不动(非目标)
       listings: tvState.listings.length,
       announcements: Math.min(tvState.announcements.length, ANNOUNCEMENTS_CAP),
-      // 过渡态(Task 3):恒 0 → 1 页;Task 4 接入 tvState.scorecard.rows.length。
+      // 过渡态(Task 3/3b):恒 0 → 1 页;Task 4 接入 scorecard/scorecardYtd 的 rows.length。
       scorecard: 0,
+      scorecard_ytd: 0,
     };
     const nextSlides = expandSlides(tvState.settings.slides.filter((s) => s.enabled), counts, perPage);
     if (!sameSlides(carouselRef.current.slides, nextSlides)) {

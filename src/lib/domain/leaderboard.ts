@@ -5,7 +5,8 @@ export type LeaderboardInputs = {
   agents: { id: string; name: string; photoUrl: string | null; active: boolean }[];
   // saleDate 'YYYY-MM-DD';split:成交拆分份额(设计 §3:sales_count 口径 = Σsplit)
   sales: { agentId: string; gciCents: number; saleDate: string; createdAt: Date; split: number }[];
-  listings: { agentId: string; listedDate: string }[];
+  // split:房源拆分份额(设计 §7b:listings 口径 = Σsplit)
+  listings: { agentId: string; listedDate: string; split: number }[];
 };
 
 type Range = { start: Date; end: Date };
@@ -51,7 +52,7 @@ function collectStats(inputs: LeaderboardInputs, range: Range): Map<string, Agen
   }
   for (const row of inputs.listings) {
     if (!inRange(row.listedDate, range)) continue;
-    get(row.agentId).listingsCount += 1;
+    get(row.agentId).listingsCount += row.split; // 设计 §7b:listings = Σsplit(可为小数)
   }
   return stats;
 }
@@ -99,7 +100,10 @@ export function computeLeaderboard(inputs: LeaderboardInputs, metric: Metric, ra
 /** Team-wide total for goal progress. Includes ALL agents (active filter not applied). */
 export function computeMetricTotal(inputs: LeaderboardInputs, metric: Metric, range: Range): number {
   if (metric === 'listings') {
-    return inputs.listings.filter((l) => inRange(l.listedDate, range)).length;
+    // Σsplit(设计 §7b);与 sales_count 同款:返回原始和,排序/显示层再 round1 防尘。
+    return inputs.listings
+      .filter((l) => inRange(l.listedDate, range))
+      .reduce((sum, l) => sum + l.split, 0);
   }
   const inPeriod = inputs.sales.filter((s) => inRange(s.saleDate, range));
   if (metric === 'sales_count') return inPeriod.reduce((sum, s) => sum + s.split, 0); // Σsplit(设计 §3)

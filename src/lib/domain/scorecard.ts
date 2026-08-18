@@ -6,7 +6,7 @@ import { round1 } from '../format';
 export type ScorecardInputs = {
   agents: { id: string; name: string; role: string; active: boolean }[];
   sales: { agentId: string; gciCents: number; saleDate: string; split: number }[];  // saleDate 'YYYY-MM-DD'
-  listings: { agentId: string; listedDate: string }[];
+  listings: { agentId: string; listedDate: string; split: number }[];  // split:Σsplit 口径(设计 §7b)
   appraisals: { agentId: string; date: string; count: number }[];                   // date 'YYYY-MM-DD'
 };
 
@@ -14,7 +14,7 @@ export type ScorecardRow = {
   agentId: string;
   name: string;
   appraisals: number;
-  listings: number;
+  listings: number;              // Σsplit,1 位小数(设计 §7b)
   sales: number;                 // 参与笔数(行数)
   split: number;                 // Σsplit,1 位小数
   gciCents: number;
@@ -64,7 +64,7 @@ export function computeScorecard(inputs: ScorecardInputs, range: Range): Scoreca
   }
   for (const row of inputs.listings) {
     if (!inRange(row.listedDate, range)) continue;
-    get(row.agentId).listings += 1;
+    get(row.agentId).listings += row.split; // 设计 §7b:listings 列与转化率分子 = Σsplit
   }
   for (const row of inputs.appraisals) {
     if (!inRange(row.date, range)) continue;
@@ -79,7 +79,7 @@ export function computeScorecard(inputs: ScorecardInputs, range: Range): Scoreca
         agentId: a.id,
         name: a.name,
         appraisals: s.appraisals,
-        listings: s.listings,
+        listings: round1(s.listings),
         sales: s.sales,
         split: round1(s.split),
         gciCents: s.gciCents,
@@ -103,6 +103,7 @@ export function computeScorecard(inputs: ScorecardInputs, range: Range): Scoreca
     { appraisals: 0, listings: 0, salesSplit: 0, gciCents: 0 },
   );
   totals.salesSplit = round1(totals.salesSplit);
+  totals.listings = round1(totals.listings);
 
   return { totals, rows };
 }

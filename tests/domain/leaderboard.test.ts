@@ -11,7 +11,7 @@ const sale = (
   agentId: string, gciCents: number, saleDate: string,
   createdAt = `${saleDate}T10:00:00`, split = 1,
 ) => ({ agentId, gciCents, saleDate, createdAt: new Date(createdAt), split });
-const listing = (agentId: string, listedDate: string) => ({ agentId, listedDate });
+const listing = (agentId: string, listedDate: string, split = 1) => ({ agentId, listedDate, split });
 
 describe('computeLeaderboard', () => {
   it('sales_count: counts in-period sales, ranks desc, passes photoUrl through', () => {
@@ -202,6 +202,22 @@ describe('computeLeaderboard', () => {
     expect(rows.map((r) => r.agentId)).toEqual(['b', 'a']);
   });
 
+  it('listings sums split fractions (设计 §7b:Σsplit,可为小数)', () => {
+    const inputs: LeaderboardInputs = {
+      agents: [agent('a', 'Alice'), agent('b', 'Bob')],
+      sales: [],
+      listings: [
+        listing('a', '2026-08-03'),
+        listing('a', '2026-08-04', 0.66),
+        listing('b', '2026-08-05', 0.9),
+      ],
+    };
+    const rows = computeLeaderboard(inputs, 'listings', AUG);
+    expect(rows[0]).toMatchObject({ agentId: 'a', rank: 1 });
+    expect(rows[0]!.value).toBeCloseTo(1.66, 12);
+    expect(rows[1]).toMatchObject({ agentId: 'b', value: 0.9, rank: 2 });
+  });
+
   it('ignores sales from agents missing in the inputs but still counts them in totals', () => {
     const inputs: LeaderboardInputs = {
       agents: [agent('a', 'Alice')],
@@ -250,6 +266,19 @@ describe('computeMetricTotal', () => {
     };
     // 浮点求和用 toBeCloseTo(1 + 0.8 + 0.5 = 2.3)
     expect(computeMetricTotal(inputs, 'sales_count', AUG)).toBeCloseTo(2.3, 12);
+  });
+
+  it('listings total sums splits (not row count)', () => {
+    const inputs: LeaderboardInputs = {
+      agents: [agent('a', 'Alice')],
+      sales: [],
+      listings: [
+        listing('a', '2026-08-03'),
+        listing('a', '2026-08-04', 0.33),
+        listing('a', '2026-07-01', 0.5), // out of period
+      ],
+    };
+    expect(computeMetricTotal(inputs, 'listings', AUG)).toBeCloseTo(1.33, 12);
   });
 });
 

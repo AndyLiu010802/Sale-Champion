@@ -17,11 +17,13 @@ beforeEach(async () => {
 });
 
 describe('SLIDE_KEYS / DEFAULT_SETTINGS', () => {
-  it('leads with the scorecard slide across all 7 keys (设计 §4)', () => {
-    expect(SLIDE_KEYS).toHaveLength(7);
+  it('leads with both scorecard slides across all 8 keys (设计 §4/§7b)', () => {
+    expect(SLIDE_KEYS).toHaveLength(8);
     expect(SLIDE_KEYS[0]).toBe('scorecard');
+    expect(SLIDE_KEYS[1]).toBe('scorecard_ytd');
     expect(DEFAULT_SETTINGS.slides.map((s) => s.key)).toEqual([...SLIDE_KEYS]);
     expect(DEFAULT_SETTINGS.slides[0]).toEqual({ key: 'scorecard', enabled: true, durationSec: 20 });
+    expect(DEFAULT_SETTINGS.slides[1]).toEqual({ key: 'scorecard_ytd', enabled: true, durationSec: 20 });
   });
 });
 
@@ -71,12 +73,12 @@ describe('/api/settings', () => {
   });
 
   it('rejects slides with missing or duplicate keys', async () => {
-    // Missing keys (only 5 of the 7 required slide keys present).
+    // Missing keys (only 5 of the 8 required slide keys present).
     const missingKey = { ...DEFAULT_SETTINGS, slides: DEFAULT_SETTINGS.slides.slice(0, 5) };
     const res1 = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: missingKey }));
     expect(res1.status).toBe(400);
 
-    // Duplicate key (8 entries: all seven keys present plus the first key repeated).
+    // Duplicate key (9 entries: all eight keys present plus the first key repeated).
     const duplicateKey = { ...DEFAULT_SETTINGS, slides: [DEFAULT_SETTINGS.slides[0], ...DEFAULT_SETTINGS.slides] };
     const res2 = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: duplicateKey }));
     expect(res2.status).toBe(400);

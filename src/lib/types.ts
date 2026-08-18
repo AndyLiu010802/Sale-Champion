@@ -11,7 +11,7 @@ export type LeaderboardEntry = {
   agentId: string;
   name: string;
   photoUrl: string | null;
-  value: number;   // sales_count: Σsplit(可为小数);listings: count;gci: cents
+  value: number;   // sales_count/listings: Σsplit(可为小数);gci: cents
   rank: number;    // 1-based, fully ordered (ties broken deterministically)
 };
 
@@ -41,5 +41,7 @@ export type TvStateResponse = {
   listings: TvListing[];                              // status='active', listedDate desc, limit 40
   announcements: TvAnnouncement[];                    // enabled only, sortOrder asc
   scorecard: ScorecardData;                           // 设计 §5:全指标 0 不成行,gciCents desc
+  scorecardYtd: ScorecardData;                        // 设计 §7b:澳洲财年 to-date,同一形状
   periodLabel: string;                                // periodLabel(settings.leaderboardPeriod, now)
+  fyLabel: string;                                    // fyLabel(now),如 'FY 2026–27'
 };

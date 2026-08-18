@@ -4,10 +4,11 @@ import type { Db } from './db';
 import { settings } from './db/schema';
 import type { Period } from './types';
 
-// 7 键(设计 §4):scorecard 排首位。已存的 6 键 settings 行 safeParse 失败后
-// 由 getSettings 回落新 DEFAULT_SETTINGS(既有轮播自定义丢失一次,已接受)。
+// 8 键(设计 §4/§7b):scorecard(MTD)首位、scorecard_ytd(财年 to-date)第二位。
+// 已存的 6/7 键 settings 行 safeParse 失败后由 getSettings 回落新 DEFAULT_SETTINGS
+// (既有轮播自定义丢失一次,已接受)。
 export const SLIDE_KEYS = [
-  'scorecard',
+  'scorecard', 'scorecard_ytd',
   'leaderboard_sales_count', 'leaderboard_gci', 'leaderboard_listings',
   'goal_progress', 'listings', 'announcements',
 ] as const;
@@ -44,6 +45,7 @@ export const settingsSchema: z.ZodType<SettingsData> = z.object({
 export const DEFAULT_SETTINGS: SettingsData = {
   slides: [
     { key: 'scorecard', enabled: true, durationSec: 20 },
+    { key: 'scorecard_ytd', enabled: true, durationSec: 20 },
     { key: 'leaderboard_sales_count', enabled: true, durationSec: 15 },
     { key: 'leaderboard_gci', enabled: true, durationSec: 15 },
     { key: 'leaderboard_listings', enabled: true, durationSec: 15 },

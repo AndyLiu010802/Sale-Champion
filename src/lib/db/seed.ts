@@ -11,6 +11,7 @@ import {
 const DEFAULT_SETTINGS_DATA = {
   slides: [
     { key: 'scorecard', enabled: true, durationSec: 20 },
+    { key: 'scorecard_ytd', enabled: true, durationSec: 20 },
     { key: 'leaderboard_sales_count', enabled: true, durationSec: 15 },
     { key: 'leaderboard_gci', enabled: true, durationSec: 15 },
     { key: 'leaderboard_listings', enabled: true, durationSec: 15 },
