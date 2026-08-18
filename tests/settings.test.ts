@@ -17,10 +17,11 @@ beforeEach(async () => {
 });
 
 describe('SLIDE_KEYS / DEFAULT_SETTINGS', () => {
-  it('leads with both scorecard slides across all 8 keys (设计 §4/§7b)', () => {
-    expect(SLIDE_KEYS).toHaveLength(8);
+  it('leads with both scorecard slides across all 7 keys (清理设计 §1:无 listings)', () => {
+    expect(SLIDE_KEYS).toHaveLength(7);
     expect(SLIDE_KEYS[0]).toBe('scorecard');
     expect(SLIDE_KEYS[1]).toBe('scorecard_ytd');
+    expect(SLIDE_KEYS).not.toContain('listings');
     expect(DEFAULT_SETTINGS.slides.map((s) => s.key)).toEqual([...SLIDE_KEYS]);
     expect(DEFAULT_SETTINGS.slides[0]).toEqual({ key: 'scorecard', enabled: true, durationSec: 20 });
     expect(DEFAULT_SETTINGS.slides[1]).toEqual({ key: 'scorecard_ytd', enabled: true, durationSec: 20 });
@@ -44,6 +45,27 @@ describe('getSettings / saveSettings', () => {
 
   it('falls back to defaults when stored data is malformed', async () => {
     await db.insert(settings).values({ orgId, data: { garbage: true }, updatedAt: new Date() });
+    expect(await getSettings(db, orgId)).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('falls back to defaults for a stored legacy 8-key row (清理设计 §1.3)', async () => {
+    // 升级前保存的 8 键行(含被移除的 'listings' 键 + 自定义时长):
+    // safeParse 失败 → 回落新 7 键 DEFAULT_SETTINGS,轮播自定义丢失一次(已接受)。
+    const legacySlides = [
+      { key: 'scorecard', enabled: true, durationSec: 20 },
+      { key: 'scorecard_ytd', enabled: true, durationSec: 20 },
+      { key: 'leaderboard_sales_count', enabled: true, durationSec: 15 },
+      { key: 'leaderboard_gci', enabled: true, durationSec: 15 },
+      { key: 'leaderboard_listings', enabled: true, durationSec: 15 },
+      { key: 'goal_progress', enabled: true, durationSec: 10 },
+      { key: 'listings', enabled: true, durationSec: 25 },
+      { key: 'announcements', enabled: true, durationSec: 10 },
+    ];
+    await db.insert(settings).values({
+      orgId,
+      data: { ...DEFAULT_SETTINGS, slides: legacySlides },
+      updatedAt: new Date(),
+    });
     expect(await getSettings(db, orgId)).toEqual(DEFAULT_SETTINGS);
   });
 });
@@ -73,12 +95,12 @@ describe('/api/settings', () => {
   });
 
   it('rejects slides with missing or duplicate keys', async () => {
-    // Missing keys (only 5 of the 8 required slide keys present).
+    // Missing keys (only 5 of the 7 required slide keys present).
     const missingKey = { ...DEFAULT_SETTINGS, slides: DEFAULT_SETTINGS.slides.slice(0, 5) };
     const res1 = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: missingKey }));
     expect(res1.status).toBe(400);
 
-    // Duplicate key (9 entries: all eight keys present plus the first key repeated).
+    // Duplicate key (8 entries: all seven keys present plus the first key repeated).
     const duplicateKey = { ...DEFAULT_SETTINGS, slides: [DEFAULT_SETTINGS.slides[0], ...DEFAULT_SETTINGS.slides] };
     const res2 = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: duplicateKey }));
     expect(res2.status).toBe(400);

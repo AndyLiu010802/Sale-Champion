@@ -4,13 +4,13 @@ import type { Db } from './db';
 import { settings } from './db/schema';
 import type { Period } from './types';
 
-// 8 键(设计 §4/§7b):scorecard(MTD)首位、scorecard_ytd(财年 to-date)第二位。
-// 已存的 6/7 键 settings 行 safeParse 失败后由 getSettings 回落新 DEFAULT_SETTINGS
-// (既有轮播自定义丢失一次,已接受)。
+// 7 键(清理设计 §1):scorecard(MTD)首位、scorecard_ytd(财年 to-date)第二位;
+// 'listings'(Hot Listings 页)已彻底移除。已存的 6/7/8 键 settings 行 safeParse 失败后
+// 由 getSettings 回落新 DEFAULT_SETTINGS(既有轮播自定义丢失一次,已接受)。
 export const SLIDE_KEYS = [
   'scorecard', 'scorecard_ytd',
   'leaderboard_sales_count', 'leaderboard_gci', 'leaderboard_listings',
-  'goal_progress', 'listings', 'announcements',
+  'goal_progress', 'announcements',
 ] as const;
 export type SlideKey = (typeof SLIDE_KEYS)[number];
 
@@ -50,7 +50,6 @@ export const DEFAULT_SETTINGS: SettingsData = {
     { key: 'leaderboard_gci', enabled: true, durationSec: 15 },
     { key: 'leaderboard_listings', enabled: true, durationSec: 15 },
     { key: 'goal_progress', enabled: true, durationSec: 10 },
-    { key: 'listings', enabled: true, durationSec: 12 },
     { key: 'announcements', enabled: true, durationSec: 10 },
   ],
   leaderboardPeriod: 'month',

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { expandSlides, pageSize, gridPageSize, pageCount, pageSlice } from '@/lib/pagination';
+import { expandSlides, pageSize, pageCount, pageSlice } from '@/lib/pagination';
 import type { SlideConfig } from '@/lib/settings';
 
 describe('pageSize', () => {
@@ -15,21 +15,6 @@ describe('pageSize', () => {
     expect(pageSize(50, 84)).toBe(1);
     expect(pageSize(0, 84)).toBe(1);
     expect(pageSize(-200, 84)).toBe(1); // tiny window minus reserved px can go negative
-  });
-});
-
-describe('gridPageSize', () => {
-  it('multiplies whole rows by the column count', () => {
-    expect(gridPageSize(884, 424, 4)).toBe(8); // 2 rows x 4 cols
-  });
-
-  it('exact division', () => {
-    expect(gridPageSize(848, 424, 4)).toBe(8);
-  });
-
-  it('keeps one full row when not even one row fits', () => {
-    expect(gridPageSize(100, 424, 4)).toBe(4);
-    expect(gridPageSize(-50, 424, 4)).toBe(4);
   });
 });
 
@@ -79,14 +64,14 @@ describe('expandSlides', () => {
 
   it('expands a multi-page slide into consecutive steps sharing the full duration', () => {
     const out = expandSlides(
-      [enabled('leaderboard_sales_count', 15), enabled('listings', 12)],
-      { leaderboard_sales_count: 4, listings: 3 },
-      { leaderboard_sales_count: 3, listings: 8 },
+      [enabled('leaderboard_sales_count', 15), enabled('scorecard', 12)],
+      { leaderboard_sales_count: 4, scorecard: 3 },
+      { leaderboard_sales_count: 3, scorecard: 8 },
     );
     expect(out).toEqual([
       { key: 'leaderboard_sales_count', durationSec: 15, page: 0, pageCount: 2 },
       { key: 'leaderboard_sales_count', durationSec: 15, page: 1, pageCount: 2 },
-      { key: 'listings', durationSec: 12, page: 0, pageCount: 1 },
+      { key: 'scorecard', durationSec: 12, page: 0, pageCount: 1 },
     ]);
   });
 
@@ -96,8 +81,8 @@ describe('expandSlides', () => {
   });
 
   it('zero items still yield one page (renders the existing "No data yet")', () => {
-    const out = expandSlides([enabled('listings', 12)], { listings: 0 }, { listings: 8 });
-    expect(out).toEqual([{ key: 'listings', durationSec: 12, page: 0, pageCount: 1 }]);
+    const out = expandSlides([enabled('scorecard', 12)], { scorecard: 0 }, { scorecard: 8 });
+    expect(out).toEqual([{ key: 'scorecard', durationSec: 12, page: 0, pageCount: 1 }]);
   });
 
   it('missing counts/perPage entries default to 0 items on 1-per-page (single page)', () => {

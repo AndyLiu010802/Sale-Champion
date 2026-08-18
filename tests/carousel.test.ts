@@ -11,7 +11,7 @@ const slides: CarouselSlide[] = [
 ];
 
 const altSlides: CarouselSlide[] = [
-  { key: 'listings', durationSec: 12, page: 0, pageCount: 1 },
+  { key: 'scorecard', durationSec: 12, page: 0, pageCount: 1 },
   { key: 'announcements', durationSec: 8, page: 0, pageCount: 1 },
 ];
 

@@ -1,17 +1,39 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { freshDb, seedBasics, type Basics } from '../helpers/db';
 import { jsonRequest, authedRequest } from '../helpers/request';
 import { getHub } from '@/lib/ws/hub';
 import type { ServerEvent } from '@/lib/ws/protocol';
+import type { Db } from '@/lib/db';
+import { agents, appraisals, listings, orgs, sales } from '@/lib/db/schema';
 import { GET, POST } from '@/app/api/agents/route';
 import { PATCH, DELETE } from '@/app/api/agents/[id]/route';
+import { GET as USAGE_GET } from '@/app/api/agents/[id]/usage/route';
 import { POST as BIRTHDAY_BROADCAST } from '@/app/api/agents/[id]/birthday-broadcast/route';
 
+let db: Db;
 let basics: Basics;
 let events: ServerEvent[];
 
+/** 给某成员各插一批业绩行:2 sales、1 listing、3 条 appraisals 录入(count 4/1/2)。
+ *  usage 口径 = 行数(appraisals 按录入行算,不按 count 展开)→ { 2, 1, 3 }。 */
+async function seedPerformanceRows(agentId: string, orgId: string): Promise<void> {
+  await db.insert(sales).values([
+    { id: crypto.randomUUID(), orgId, agentId, address: '1 Gone St', salePriceCents: 0, gciCents: 100000, saleDate: '2026-08-01' },
+    { id: crypto.randomUUID(), orgId, agentId, address: '2 Gone St', salePriceCents: 0, gciCents: 200000, saleDate: '2026-08-02', split: 0.5 },
+  ]);
+  await db.insert(listings).values([
+    { id: crypto.randomUUID(), orgId, agentId, address: '3 Gone Rd', listPriceCents: 0, listedDate: '2026-08-03', status: 'active' },
+  ]);
+  await db.insert(appraisals).values([
+    { id: crypto.randomUUID(), orgId, agentId, date: '2026-08-04', count: 4 },
+    { id: crypto.randomUUID(), orgId, agentId, date: '2026-08-05', count: 1 },
+    { id: crypto.randomUUID(), orgId, agentId, date: '2026-08-06', count: 2 },
+  ]);
+}
+
 beforeEach(async () => {
-  const db = await freshDb();
+  db = await freshDb();
   basics = await seedBasics(db);
   events = [];
   getHub().register(
@@ -152,8 +174,19 @@ describe('PATCH /api/agents/[id]', () => {
   });
 });
 
-describe('DELETE /api/agents/[id]', () => {
-  it('soft-deletes: row remains with active=false, and broadcasts', async () => {
+describe('DELETE /api/agents/[id] (hard delete, 清理设计 §2.2)', () => {
+  it('requires admin session', async () => {
+    const res = await DELETE(
+      jsonRequest(`/api/agents/${basics.agentId}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(res.status).toBe(401);
+    expect(events).toEqual([]);
+  });
+
+  it('hard-deletes the member and every sales/listings/appraisals row, then broadcasts once', async () => {
+    await seedPerformanceRows(basics.agentId, basics.orgId);
+
     const res = await DELETE(
       await authedRequest(`/api/agents/${basics.agentId}`, { method: 'DELETE' }),
       { params: Promise.resolve({ id: basics.agentId }) },
@@ -161,11 +194,27 @@ describe('DELETE /api/agents/[id]', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ data: { id: basics.agentId } });
 
-    const list = await GET(await authedRequest('/api/agents'));
-    const { data } = await list.json();
-    const alice = data.find((a: { id: string }) => a.id === basics.agentId);
-    expect(alice).toBeDefined();
-    expect(alice.active).toBe(false);
+    // 成员行与三张子表的行全部消失(真删除;schema 无级联,route 必须自己删子表)。
+    expect(await db.select().from(agents).where(eq(agents.id, basics.agentId))).toHaveLength(0);
+    expect(await db.select().from(sales).where(eq(sales.agentId, basics.agentId))).toHaveLength(0);
+    expect(await db.select().from(listings).where(eq(listings.agentId, basics.agentId))).toHaveLength(0);
+    expect(await db.select().from(appraisals).where(eq(appraisals.agentId, basics.agentId))).toHaveLength(0);
+    expect(events).toEqual([{ type: 'data.updated', domain: 'agents' }]);
+  });
+
+  it('deletes a staff member (no performance rows) as well', async () => {
+    const created = await POST(
+      await authedRequest('/api/agents', { method: 'POST', body: { name: 'Sam Staff', role: 'staff' } }),
+    );
+    const { data: staff } = await created.json();
+    events.length = 0;
+
+    const res = await DELETE(
+      await authedRequest(`/api/agents/${staff.id}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: staff.id }) },
+    );
+    expect(res.status).toBe(200);
+    expect(await db.select().from(agents).where(eq(agents.id, staff.id))).toHaveLength(0);
     expect(events).toEqual([{ type: 'data.updated', domain: 'agents' }]);
   });
 
@@ -176,6 +225,80 @@ describe('DELETE /api/agents/[id]', () => {
     );
     expect(res.status).toBe(404);
     expect(events).toEqual([]);
+  });
+
+  it('cannot delete a member of another org (404) and leaves their rows untouched', async () => {
+    const otherOrgId = crypto.randomUUID();
+    await db.insert(orgs).values({ id: otherOrgId, name: 'Other Agency' });
+    const outsiderId = crypto.randomUUID();
+    await db.insert(agents).values({ id: outsiderId, orgId: otherOrgId, name: 'Olive Out' });
+    await db.insert(sales).values({
+      id: crypto.randomUUID(), orgId: otherOrgId, agentId: outsiderId,
+      address: '9 Other St', salePriceCents: 0, gciCents: 100000, saleDate: '2026-08-01',
+    });
+
+    const res = await DELETE(
+      await authedRequest(`/api/agents/${outsiderId}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: outsiderId }) },
+    );
+    expect(res.status).toBe(404);
+    expect(await db.select().from(agents).where(eq(agents.id, outsiderId))).toHaveLength(1);
+    expect(await db.select().from(sales).where(eq(sales.agentId, outsiderId))).toHaveLength(1);
+    expect(events).toEqual([]);
+  });
+});
+
+describe('GET /api/agents/[id]/usage (清理设计 §2.2)', () => {
+  it('requires admin session', async () => {
+    const res = await USAGE_GET(
+      jsonRequest(`/api/agents/${basics.agentId}/usage`),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('counts the member sales, listings and appraisal entries without broadcasting', async () => {
+    await seedPerformanceRows(basics.agentId, basics.orgId);
+
+    const res = await USAGE_GET(
+      await authedRequest(`/api/agents/${basics.agentId}/usage`),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(res.status).toBe(200);
+    // appraisals 按录入行数计(3 行),不按 count 字段展开(4+1+2=7)。
+    expect(await res.json()).toEqual({ data: { sales: 2, listings: 1, appraisals: 3 } });
+    expect(events).toEqual([]);
+  });
+
+  it('returns zero counts for a member with no records', async () => {
+    const res = await USAGE_GET(
+      await authedRequest(`/api/agents/${basics.agentId}/usage`),
+      { params: Promise.resolve({ id: basics.agentId }) },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ data: { sales: 0, listings: 0, appraisals: 0 } });
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const res = await USAGE_GET(
+      await authedRequest('/api/agents/ghost/usage'),
+      { params: Promise.resolve({ id: 'ghost' }) },
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Not found' });
+  });
+
+  it('returns 404 for a member of another org', async () => {
+    const otherOrgId = crypto.randomUUID();
+    await db.insert(orgs).values({ id: otherOrgId, name: 'Other Agency' });
+    const outsiderId = crypto.randomUUID();
+    await db.insert(agents).values({ id: outsiderId, orgId: otherOrgId, name: 'Olive Out' });
+
+    const res = await USAGE_GET(
+      await authedRequest(`/api/agents/${outsiderId}/usage`),
+      { params: Promise.resolve({ id: outsiderId }) },
+    );
+    expect(res.status).toBe(404);
   });
 });
 
@@ -345,11 +468,11 @@ describe('POST /api/agents/[id]/birthday-broadcast', () => {
   });
 
   it('returns 404 for an inactive member', async () => {
-    const del = await DELETE(
-      await authedRequest(`/api/agents/${basics.agentId}`, { method: 'DELETE' }),
+    const deactivate = await PATCH(
+      await authedRequest(`/api/agents/${basics.agentId}`, { method: 'PATCH', body: { active: false } }),
       { params: Promise.resolve({ id: basics.agentId }) },
     );
-    expect(del.status).toBe(200);
+    expect(deactivate.status).toBe(200);
     events.length = 0;
 
     const res = await BIRTHDAY_BROADCAST(

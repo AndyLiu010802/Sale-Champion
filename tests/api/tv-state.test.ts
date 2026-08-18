@@ -44,7 +44,7 @@ describe('GET /api/tv/state', () => {
     expect((await tvStateGet(stateRequest('wrong-token'))).status).toBe(401);
   });
 
-  it('returns computed leaderboards, goals, listings, announcements and period label', async () => {
+  it('returns computed leaderboards, goals, announcements and period label (no listings field)', async () => {
     const today = localDateStr(new Date());
     const bobId = crypto.randomUUID();
     await db.insert(agents).values({ id: bobId, orgId: basics.orgId, name: 'Bob Ray' });
@@ -97,35 +97,11 @@ describe('GET /api/tv/state', () => {
       metric: 'sales_count', period: 'month', targetValue: 10, currentValue: 3, percent: 30,
     });
 
-    // tv listings: active only, joined agent name.
-    expect(data.listings).toHaveLength(1);
-    expect(data.listings[0]).toMatchObject({
-      address: '10 Beach Rd', listPriceCents: 80000000, agentName: 'Alice Ng',
-    });
+    // Hot Listings 页已移除(清理设计 §1):响应不再包含 listings 字段。
+    expect(data).not.toHaveProperty('listings');
 
     // announcements: enabled only, sortOrder asc.
     expect(data.announcements.map((a: any) => a.title)).toEqual(['First news', 'Enabled news']);
-  });
-
-  it('returns up to 40 active listings (was 8)', async () => {
-    const today = localDateStr(new Date());
-    await db.insert(listings).values(
-      Array.from({ length: 45 }, (_, i) => ({
-        id: crypto.randomUUID(),
-        orgId: basics.orgId,
-        agentId: basics.agentId,
-        address: `${i + 1} Volume Street`,
-        listPriceCents: 50_000_000 + i,
-        listedDate: today,
-        status: 'active',
-      })),
-    );
-
-    const res = await tvStateGet(stateRequest(token));
-    expect(res.status).toBe(200);
-    const { data } = await res.json();
-    // 45 条 active 只回 40(安全封顶);listedDate 相同,不断言被截掉的是哪 5 条。
-    expect(data.listings).toHaveLength(40);
   });
 
   it('assembles the scorecard block (totals, ranked rows, conversion)', async () => {

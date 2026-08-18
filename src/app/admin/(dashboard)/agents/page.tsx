@@ -51,6 +51,7 @@ export default function AgentsPage() {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [broadcastingId, setBroadcastingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [role, setRole] = useState<'agent' | 'staff'>('agent');
   const [birthdayMonth, setBirthdayMonth] = useState('');
   const [birthdayDay, setBirthdayDay] = useState('');
@@ -248,6 +249,43 @@ export default function AgentsPage() {
     }
   }
 
+  async function deleteAgent(agent: AgentRow) {
+    setError(null);
+    setDeletingId(agent.id);
+    try {
+      // 先取该成员名下记录计数,让确认弹窗给出具体数字(清理设计 §2.1)。
+      const usageRes = await fetch(`/api/agents/${agent.id}/usage`);
+      if (!usageRes.ok) {
+        const body = (await usageRes
+          .json()
+          .catch(() => ({ error: 'Failed to load member records' }))) as { error?: string };
+        setError(body.error ?? 'Failed to load member records');
+        return;
+      }
+      const { data: usage } = (await usageRes.json()) as {
+        data: { sales: number; listings: number; appraisals: number };
+      };
+      const confirmed = window.confirm(
+        `Delete "${agent.name}"? This permanently removes ${usage.sales} sales, ` +
+          `${usage.listings} listings and ${usage.appraisals} appraisals. This cannot be undone.`,
+      );
+      if (!confirmed) return;
+      const res = await fetch(`/api/agents/${agent.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = (await res
+          .json()
+          .catch(() => ({ error: 'Failed to delete member' }))) as { error?: string };
+        setError(body.error ?? 'Failed to delete member');
+        return;
+      }
+      await load();
+    } finally {
+      // Only clear the pending flag if no other delete has started in the
+      // meantime — same stale-finally guard as toggleActive.
+      setDeletingId((cur) => (cur === agent.id ? null : cur));
+    }
+  }
+
   const isCustomAnthem = anthemUrl !== '' && !isBuiltinAnthem(anthemUrl);
 
   return (
@@ -304,6 +342,13 @@ export default function AgentsPage() {
                   disabled={broadcastingId !== null}
                 >
                   🎂
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => deleteAgent(a)}
+                  disabled={deletingId !== null}
+                >
+                  Delete
                 </Button>
               </div>
             </td>
