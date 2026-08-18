@@ -31,6 +31,7 @@ export async function GET(req: Request) {
       address: sales.address,
       salePriceCents: sales.salePriceCents,
       gciCents: sales.gciCents,
+      split: sales.split,
       saleDate: sales.saleDate,
       createdAt: sales.createdAt,
       updatedAt: sales.updatedAt,

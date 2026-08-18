@@ -31,6 +31,7 @@ export async function GET(req: Request) {
       photoUrl: listings.photoUrl,
       listedDate: listings.listedDate,
       status: listings.status,
+      split: listings.split,
       createdAt: listings.createdAt,
       agentName: agents.name,
     })

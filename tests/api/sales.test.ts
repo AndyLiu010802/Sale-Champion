@@ -109,6 +109,7 @@ describe('GET /api/sales', () => {
     const { data } = await res.json();
     expect(data).toHaveLength(1);
     expect(data[0].agentName).toBe('Alice Ng');
+    expect(data[0].split).toBe(1);
   });
 });
 
@@ -277,6 +278,16 @@ describe('sales split (设计 §2)', () => {
     expect(res.status).toBe(200);
     expect((await res.json()).data.split).toBe(0.5);
     expect(events).toEqual([{ type: 'data.updated', domain: 'sales' }]);
+  });
+
+  it('GET list projection includes the custom split value', async () => {
+    await POST(
+      await authedRequest('/api/sales', { method: 'POST', body: { ...saleBody(), split: 0.5 } }),
+    );
+    const res = await GET(await authedRequest('/api/sales'));
+    const { data } = await res.json();
+    expect(data).toHaveLength(1);
+    expect(data[0].split).toBe(0.5);
   });
 });
 
