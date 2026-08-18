@@ -239,6 +239,47 @@ describe('DELETE /api/sales/[id]', () => {
   });
 });
 
+describe('sales split (设计 §2)', () => {
+  it('creates a sale with an explicit fractional split', async () => {
+    const res = await POST(
+      await authedRequest('/api/sales', { method: 'POST', body: { ...saleBody(), split: 0.8 } }),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.split).toBe(0.8);
+  });
+
+  it('defaults split to 1 when omitted', async () => {
+    const res = await POST(await authedRequest('/api/sales', { method: 'POST', body: saleBody() }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.split).toBe(1);
+  });
+
+  it('rejects out-of-range splits with 400', async () => {
+    for (const split of [0, -0.5, 1.5]) {
+      const res = await POST(
+        await authedRequest('/api/sales', { method: 'POST', body: { ...saleBody(), split } }),
+      );
+      expect(res.status).toBe(400);
+    }
+    expect(events).toEqual([]);
+  });
+
+  it('PATCH updates split and broadcasts data.updated sales', async () => {
+    const created = await (
+      await POST(await authedRequest('/api/sales', { method: 'POST', body: saleBody() }))
+    ).json();
+    events.length = 0;
+
+    const res = await PATCH(
+      await authedRequest(`/api/sales/${created.data.id}`, { method: 'PATCH', body: { split: 0.5 } }),
+      { params: Promise.resolve({ id: created.data.id }) },
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.split).toBe(0.5);
+    expect(events).toEqual([{ type: 'data.updated', domain: 'sales' }]);
+  });
+});
+
 describe('buildCelebrationPayload', () => {
   it('empty-string anthem falls back to the default and carries kind sale', () => {
     const celebration = buildCelebrationPayload(

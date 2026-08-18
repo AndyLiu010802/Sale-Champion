@@ -14,6 +14,8 @@ const createSchema = z.object({
   salePriceCents: z.number().int().min(0),
   gciCents: z.number().int().min(0),
   saleDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'saleDate must be YYYY-MM-DD'),
+  // 成交拆分份额(设计 §2):0 < split ≤ 1;缺省按 1(整单)
+  split: z.number().positive().max(1).optional(),
 });
 
 export async function GET(req: Request) {
@@ -82,6 +84,7 @@ export async function POST(req: Request) {
       address: parsed.data.address,
       salePriceCents: parsed.data.salePriceCents,
       gciCents: parsed.data.gciCents,
+      split: parsed.data.split ?? 1,
       saleDate: parsed.data.saleDate,
     })
     .returning();

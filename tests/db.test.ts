@@ -5,7 +5,7 @@ import type { Db } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
 import { seed } from '@/lib/db/seed';
 import {
-  orgs, users, agents, sales, listings, announcements, goals, settings,
+  orgs, users, agents, appraisals, sales, listings, announcements, goals, settings,
 } from '@/lib/db/schema';
 
 describe('database layer', () => {
@@ -59,6 +59,37 @@ describe('database layer', () => {
     await db.update(orgs).set({ lastBirthdayBroadcastDate: '2026-08-18' }).where(eq(orgs.id, orgId));
     const [orgAfter] = await db.select().from(orgs).where(eq(orgs.id, orgId));
     expect(orgAfter.lastBirthdayBroadcastDate).toBe('2026-08-18');
+  });
+
+  it('round-trips sales.split and an appraisals row', async () => {
+    const { orgId, agentId } = await seedBasics(db);
+
+    const sharedId = crypto.randomUUID();
+    await db.insert(sales).values({
+      id: sharedId, orgId, agentId, address: '2 Split Street',
+      salePriceCents: 0, gciCents: 144850, saleDate: '2026-08-11', split: 0.8,
+    });
+    const [sharedSale] = await db.select().from(sales).where(eq(sales.id, sharedId));
+    expect(sharedSale.split).toBe(0.8);
+
+    // 不显式给 split 的行落 DEFAULT 1(既有行零迁移成本)
+    const plainId = crypto.randomUUID();
+    await db.insert(sales).values({
+      id: plainId, orgId, agentId, address: '3 Plain Street',
+      salePriceCents: 0, gciCents: 100000, saleDate: '2026-08-12',
+    });
+    const [plainSale] = await db.select().from(sales).where(eq(sales.id, plainId));
+    expect(plainSale.split).toBe(1);
+
+    const appraisalId = crypto.randomUUID();
+    await db.insert(appraisals).values({
+      id: appraisalId, orgId, agentId, date: '2026-08-05', count: 8,
+    });
+    const [appraisal] = await db.select().from(appraisals).where(eq(appraisals.id, appraisalId));
+    expect(appraisal.agentId).toBe(agentId);
+    expect(appraisal.date).toBe('2026-08-05');
+    expect(appraisal.count).toBe(8);
+    expect(appraisal.createdAt).toBeInstanceOf(Date);
   });
 
   it('getOrgId resolves the first org', async () => {

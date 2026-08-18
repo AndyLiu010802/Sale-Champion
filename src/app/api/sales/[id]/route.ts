@@ -12,6 +12,7 @@ const patchSchema = z.object({
   salePriceCents: z.number().int().min(0).optional(),
   gciCents: z.number().int().min(0).optional(),
   saleDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'saleDate must be YYYY-MM-DD').optional(),
+  split: z.number().positive().max(1).optional(),
 });
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {

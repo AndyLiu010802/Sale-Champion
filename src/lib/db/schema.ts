@@ -1,5 +1,5 @@
 import {
-  pgTable, text, integer, bigint, boolean, timestamp, date, jsonb, uniqueIndex,
+  pgTable, text, integer, bigint, boolean, timestamp, date, jsonb, uniqueIndex, doublePrecision,
 } from 'drizzle-orm/pg-core';
 
 export const orgs = pgTable('orgs', {
@@ -39,6 +39,9 @@ export const sales = pgTable('sales', {
   salePriceCents: bigint('sale_price_cents', { mode: 'number' }).notNull(),
   gciCents: bigint('gci_cents', { mode: 'number' }).notNull(),
   saleDate: date('sale_date', { mode: 'string' }).notNull(),
+  // 成交拆分份额(设计 §2):0 < split ≤ 1(zod 层校验);共享成交每位参与者各一行,
+  // 各自 split 与佣金份额;既有行走 DEFAULT 1(整单)。
+  split: doublePrecision('split').notNull().default(1),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -52,6 +55,15 @@ export const listings = pgTable('listings', {
   photoUrl: text('photo_url'),
   listedDate: date('listed_date', { mode: 'string' }).notNull(),
   status: text('status').notNull().default('active'), // 'active' | 'sold' | 'withdrawn'
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const appraisals = pgTable('appraisals', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => orgs.id),
+  agentId: text('agent_id').notNull().references(() => agents.id),
+  date: text('date').notNull(),                  // 'YYYY-MM-DD'(API 层 regex 校验,设计 §2)
+  count: integer('count').notNull().default(1),  // 一次录入可 +N(≥1,API 层校验)
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
