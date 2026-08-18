@@ -52,7 +52,7 @@ export default function DashboardPage() {
   // `activeAgents` — add it back as an extra option so the required <select> still has a
   // valid selected value and native validation doesn't block address/price/date-only edits.
   const editingUnavailableAgent = editing
-    ? agents.find((a) => a.id === editing.agentId && !activeAgents.includes(a))
+    ? agents.find((a) => a.id === editing.agentId && !activeAgents.some((x) => x.id === a.id))
     : undefined;
 
   const load = useCallback(async () => {

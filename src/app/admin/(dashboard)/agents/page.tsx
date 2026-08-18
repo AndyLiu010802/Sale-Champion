@@ -167,7 +167,11 @@ export default function AgentsPage() {
         const patch: Record<string, string | null> = {};
         if (name !== editingAgent.name) patch.name = name;
         if (photoUrl !== (editingAgent.photoUrl ?? '')) patch.photoUrl = photoUrl || null;
-        if (anthemUrl !== (editingAgent.anthemUrl ?? '')) patch.anthemUrl = anthemUrl || null;
+        // Staff have no anthem field in the UI — never send anthemUrl for a staff row,
+        // so it's neither set nor cleared and the underlying data (if any) is preserved.
+        if (role === 'agent') {
+          if (anthemUrl !== (editingAgent.anthemUrl ?? '')) patch.anthemUrl = anthemUrl || null;
+        }
         if (role !== editingAgent.role) patch.role = role;
         if (birthday !== editingAgent.birthday) patch.birthday = birthday;
         if (Object.keys(patch).length === 0) {
@@ -187,7 +191,7 @@ export default function AgentsPage() {
             name,
             role,
             ...(photoUrl ? { photoUrl } : {}),
-            ...(anthemUrl ? { anthemUrl } : {}),
+            ...(role === 'agent' && anthemUrl ? { anthemUrl } : {}),
             ...(birthday ? { birthday } : {}),
           }),
         });

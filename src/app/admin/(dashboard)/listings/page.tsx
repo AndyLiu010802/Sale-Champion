@@ -69,7 +69,7 @@ export default function ListingsPage() {
   // in `activeAgents` — add it back as an extra option so the required <select> still has
   // a valid selected value.
   const editingUnavailableAgent = editingListing
-    ? agents.find((a) => a.id === editingListing.agentId && !activeAgents.includes(a))
+    ? agents.find((a) => a.id === editingListing.agentId && !activeAgents.some((x) => x.id === a.id))
     : undefined;
 
   const load = useCallback(async () => {
