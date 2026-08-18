@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Button, Field, Modal, Select, Table, TextInput } from '@/components/admin/ui';
 import { formatMoney } from '@/lib/format';
 
-type AgentRow = { id: string; name: string; active: boolean };
+type AgentRow = { id: string; name: string; active: boolean; role: 'agent' | 'staff' };
 
 type SaleRow = {
   id: string;
@@ -42,16 +42,17 @@ export default function DashboardPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Full agent list (active + inactive) — needed so an already-recorded sale for a
-  // now-deactivated agent can still show that agent's name and be edited without
-  // reassigning it. Views that let the admin *pick* an agent filter down to `active`.
-  const activeAgents = agents.filter((a) => a.active);
-  // If the sale being edited belongs to an agent who has since been deactivated, that
-  // agent won't be in `activeAgents` — add it back as an extra option so the required
-  // <select> still has a valid selected value and native validation doesn't block
-  // address/price/date-only edits.
-  const editingInactiveAgent = editing
-    ? agents.find((a) => a.id === editing.agentId && !a.active)
+  // Full agent list (active + inactive, agent + staff) — needed so an already-recorded
+  // sale for a now-deactivated (or since-demoted-to-staff) agent can still show that
+  // agent's name and be edited without reassigning it. Views that let the admin *pick*
+  // an agent filter down to active agents (staff never appear — they can't record sales).
+  const activeAgents = agents.filter((a) => a.active && a.role === 'agent');
+  // If the sale being edited belongs to an agent who is no longer selectable (deactivated
+  // or demoted to staff since the sale was recorded), that agent won't be in
+  // `activeAgents` — add it back as an extra option so the required <select> still has a
+  // valid selected value and native validation doesn't block address/price/date-only edits.
+  const editingUnavailableAgent = editing
+    ? agents.find((a) => a.id === editing.agentId && !activeAgents.includes(a))
     : undefined;
 
   const load = useCallback(async () => {
@@ -312,9 +313,9 @@ export default function DashboardPage() {
                   {a.name}
                 </option>
               ))}
-              {editingInactiveAgent && (
-                <option value={editingInactiveAgent.id}>
-                  {editingInactiveAgent.name} (inactive)
+              {editingUnavailableAgent && (
+                <option value={editingUnavailableAgent.id}>
+                  {editingUnavailableAgent.name} (unavailable)
                 </option>
               )}
             </Select>

@@ -9,10 +9,18 @@ type AgentRow = {
   name: string;
   photoUrl: string | null;
   anthemUrl: string | null;
+  role: 'agent' | 'staff';
+  birthday: string | null;
   active: boolean;
 };
 
 const UPLOAD_OPTION = 'upload-custom';
+
+// Birthday dropdown options — zero-padded to match the server's 'MM-DD' format.
+// Day range is a flat 01-31 (no per-month clamping); the server's BIRTHDAY_RE is
+// equally permissive by design, so e.g. 02-31 is selectable and accepted.
+const MONTHS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
 
 function anthemLabel(anthemUrl: string | null): string {
   if (!anthemUrl) return 'Default';
@@ -42,6 +50,10 @@ export default function AgentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [broadcastingId, setBroadcastingId] = useState<string | null>(null);
+  const [role, setRole] = useState<'agent' | 'staff'>('agent');
+  const [birthdayMonth, setBirthdayMonth] = useState('');
+  const [birthdayDay, setBirthdayDay] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingAnthem, setUploadingAnthem] = useState(false);
   const anthemFileRef = useRef<HTMLInputElement>(null);
@@ -68,6 +80,9 @@ export default function AgentsPage() {
     setName('');
     setPhotoUrl('');
     setAnthemUrl('');
+    setRole('agent');
+    setBirthdayMonth('');
+    setBirthdayDay('');
     setError(null);
     setModalOpen(true);
   }
@@ -77,6 +92,10 @@ export default function AgentsPage() {
     setName(agent.name);
     setPhotoUrl(agent.photoUrl ?? '');
     setAnthemUrl(agent.anthemUrl ?? '');
+    setRole(agent.role);
+    const [bm, bd] = agent.birthday ? agent.birthday.split('-') : ['', ''];
+    setBirthdayMonth(bm ?? '');
+    setBirthdayDay(bd ?? '');
     setError(null);
     setModalOpen(true);
   }
@@ -137,16 +156,20 @@ export default function AgentsPage() {
     setError(null);
     setSaving(true);
     try {
+      // Both dropdowns picked → 'MM-DD'; either left on '—' → null (cleared).
+      const birthday = birthdayMonth && birthdayDay ? `${birthdayMonth}-${birthdayDay}` : null;
       let res: Response;
       if (editingAgent) {
         // Diff-only PATCH: only send fields that actually changed from the agent
-        // being edited. Cleared photo/anthem fields are sent as explicit `null`
-        // (the API supports clearing that way); untouched fields are omitted so
-        // an unrelated field's empty-string state never trips server validation.
+        // being edited. Cleared photo/anthem/birthday fields are sent as explicit
+        // `null` (the API supports clearing that way); untouched fields are omitted
+        // so an unrelated field's empty-string state never trips server validation.
         const patch: Record<string, string | null> = {};
         if (name !== editingAgent.name) patch.name = name;
         if (photoUrl !== (editingAgent.photoUrl ?? '')) patch.photoUrl = photoUrl || null;
         if (anthemUrl !== (editingAgent.anthemUrl ?? '')) patch.anthemUrl = anthemUrl || null;
+        if (role !== editingAgent.role) patch.role = role;
+        if (birthday !== editingAgent.birthday) patch.birthday = birthday;
         if (Object.keys(patch).length === 0) {
           setModalOpen(false);
           return;
@@ -162,8 +185,10 @@ export default function AgentsPage() {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             name,
+            role,
             ...(photoUrl ? { photoUrl } : {}),
             ...(anthemUrl ? { anthemUrl } : {}),
+            ...(birthday ? { birthday } : {}),
           }),
         });
       }
@@ -201,16 +226,34 @@ export default function AgentsPage() {
     }
   }
 
+  async function broadcastBirthday(agent: AgentRow) {
+    setError(null);
+    setBroadcastingId(agent.id);
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/birthday-broadcast`, { method: 'POST' });
+      if (!res.ok) {
+        const body = (await res
+          .json()
+          .catch(() => ({ error: 'Failed to play birthday broadcast' }))) as { error?: string };
+        setError(body.error ?? 'Failed to play birthday broadcast');
+      }
+    } finally {
+      // Only clear the pending flag if no other broadcast has started in the
+      // meantime — same stale-finally guard as toggleActive.
+      setBroadcastingId((cur) => (cur === agent.id ? null : cur));
+    }
+  }
+
   const isCustomAnthem = anthemUrl !== '' && !isBuiltinAnthem(anthemUrl);
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="font-heading text-2xl font-bold text-ink">Agents</h1>
+        <h1 className="font-heading text-2xl font-bold text-ink">Team</h1>
         <Button onClick={openCreate}>New agent</Button>
       </div>
 
-      <Table headers={['Photo', 'Name', 'Anthem', 'Active', 'Actions']}>
+      <Table headers={['Photo', 'Name', 'Type', 'Birthday', 'Anthem', 'Active', 'Actions']}>
         {agents.map((a) => (
           <tr key={a.id} className="text-ink">
             <td className="px-3 py-2">
@@ -223,6 +266,18 @@ export default function AgentsPage() {
               )}
             </td>
             <td className="px-3 py-2">{a.name}</td>
+            <td className="px-3 py-2">
+              {a.role === 'staff' ? (
+                <span className="rounded bg-panel-2 px-2 py-0.5 text-xs font-medium text-muted">
+                  Staff
+                </span>
+              ) : (
+                <span className="rounded bg-neon/10 px-2 py-0.5 text-xs font-medium text-neon">
+                  Agent
+                </span>
+              )}
+            </td>
+            <td className="px-3 py-2 text-muted">{a.birthday ?? '—'}</td>
             <td className="px-3 py-2 text-muted">{anthemLabel(a.anthemUrl)}</td>
             <td className="px-3 py-2">
               <input
@@ -234,15 +289,25 @@ export default function AgentsPage() {
               />
             </td>
             <td className="px-3 py-2">
-              <Button variant="ghost" onClick={() => openEdit(a)}>
-                Edit
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" onClick={() => openEdit(a)}>
+                  Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  aria-label="Play birthday broadcast"
+                  onClick={() => broadcastBirthday(a)}
+                  disabled={broadcastingId !== null}
+                >
+                  🎂
+                </Button>
+              </div>
             </td>
           </tr>
         ))}
         {agents.length === 0 && (
           <tr>
-            <td colSpan={5} className="px-3 py-6 text-center text-muted">
+            <td colSpan={7} className="px-3 py-6 text-center text-muted">
               No agents yet.
             </td>
           </tr>
@@ -255,6 +320,12 @@ export default function AgentsPage() {
         <form onSubmit={save} className="space-y-4">
           <Field label="Name">
             <TextInput value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+          </Field>
+          <Field label="Type">
+            <Select value={role} onChange={(e) => setRole(e.target.value as 'agent' | 'staff')}>
+              <option value="agent">Agent</option>
+              <option value="staff">Staff</option>
+            </Select>
           </Field>
           <Field label="Photo">
             <div className="flex items-center gap-3">
@@ -275,27 +346,59 @@ export default function AgentsPage() {
               {uploadingPhoto && <span className="text-sm text-muted">Uploading…</span>}
             </div>
           </Field>
-          <Field label="Anthem">
-            <Select value={anthemUrl} onChange={(e) => onAnthemSelect(e.target.value)}>
-              <option value="">Default (org anthem)</option>
-              {BUILTIN_ANTHEMS.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-              {isCustomAnthem && <option value={anthemUrl}>Custom upload</option>}
-              <option value={UPLOAD_OPTION}>Upload custom…</option>
-            </Select>
+          <Field label="Birthday">
+            <div className="flex gap-2">
+              <Select
+                aria-label="Birthday month"
+                value={birthdayMonth}
+                onChange={(e) => setBirthdayMonth(e.target.value)}
+              >
+                <option value="">—</option>
+                {MONTHS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                aria-label="Birthday day"
+                value={birthdayDay}
+                onChange={(e) => setBirthdayDay(e.target.value)}
+              >
+                <option value="">—</option>
+                {DAYS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </Field>
-          <input
-            ref={anthemFileRef}
-            type="file"
-            accept=".mp3,.m4a,.ogg"
-            onChange={onAnthemFileChange}
-            disabled={uploadingAnthem}
-            className="hidden"
-          />
-          {uploadingAnthem && <p className="text-sm text-muted">Uploading anthem…</p>}
+          {role === 'agent' && (
+            <>
+              <Field label="Anthem">
+                <Select value={anthemUrl} onChange={(e) => onAnthemSelect(e.target.value)}>
+                  <option value="">Default (org anthem)</option>
+                  {BUILTIN_ANTHEMS.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                  {isCustomAnthem && <option value={anthemUrl}>Custom upload</option>}
+                  <option value={UPLOAD_OPTION}>Upload custom…</option>
+                </Select>
+              </Field>
+              <input
+                ref={anthemFileRef}
+                type="file"
+                accept=".mp3,.m4a,.ogg"
+                onChange={onAnthemFileChange}
+                disabled={uploadingAnthem}
+                className="hidden"
+              />
+              {uploadingAnthem && <p className="text-sm text-muted">Uploading anthem…</p>}
+            </>
+          )}
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={closeModal}>
