@@ -42,3 +42,23 @@ export function periodLabel(period: Period, now: Date): string {
       return String(now.getFullYear());
   }
 }
+
+/** 澳洲财年起始年:7 月(含)以后属当年启动的财年,1–6 月属前一年启动的财年(设计 §7b)。 */
+function fyStartYear(now: Date): number {
+  return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+/** 财年 to-date:7 月 1 日 00:00(本地)起,至明日 00:00(排他)——今天整天计入。 */
+export function fyToDateRange(now: Date): { start: Date; end: Date } {
+  return {
+    start: new Date(fyStartYear(now), 6, 1),
+    end: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1),
+  };
+}
+
+/** 财年标签:2026-07-01~2027-06-30 → 'FY 2026–27'(en dash)。 */
+export function fyLabel(now: Date): string {
+  const startYear = fyStartYear(now);
+  const nextYY = String((startYear + 1) % 100).padStart(2, '0');
+  return `FY ${startYear}–${nextYY}`;
+}

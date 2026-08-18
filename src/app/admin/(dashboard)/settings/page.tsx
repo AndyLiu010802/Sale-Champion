@@ -7,6 +7,8 @@ import type { SettingsData, SlideKey } from '@/lib/settings';
 import { PERIODS, type Period } from '@/lib/types';
 
 const SLIDE_LABELS: Record<SlideKey, string> = {
+  scorecard: 'Sales Scorecard (month to date)',
+  scorecard_ytd: 'Sales Scorecard (year to date)',
   leaderboard_sales_count: 'Sales Champions (sales count)',
   leaderboard_gci: 'Top Earners (GCI)',
   leaderboard_listings: 'Listing Legends (new listings)',

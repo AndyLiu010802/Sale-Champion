@@ -12,6 +12,7 @@ import StartOverlay from '@/components/tv/StartOverlay';
 import OfflineBadge from '@/components/tv/OfflineBadge';
 import CelebrationOverlay from '@/components/tv/CelebrationOverlay';
 import LeaderboardSlide from '@/components/tv/slides/LeaderboardSlide';
+import ScorecardSlide from '@/components/tv/slides/ScorecardSlide';
 import GoalSlide from '@/components/tv/slides/GoalSlide';
 import ListingsSlide from '@/components/tv/slides/ListingsSlide';
 import AnnouncementSlide from '@/components/tv/slides/AnnouncementSlide';
@@ -24,6 +25,11 @@ const LISTINGS_ROW_PX = 424;
 const LISTINGS_COLUMNS = 4;
 // AnnouncementSlide:卡 h-[224px] + 卡间 gap-6(24px)。
 const ANNOUNCEMENT_ITEM_PX = 248;
+// ScorecardSlide:表格行 h-[56px](border-collapse,行间无边框无间距);MTD/YTD 共用。
+const SCORECARD_ITEM_PX = 56;
+// Scorecard 头部预留:py-12 上 48 + 标题 text-6xl 60 + mt-8 32 + 汇总块 h-[120px] 120
+// + mt-8 32 + 表头 h-[48px] 48 + py-12 下 48 = 388(与 ScorecardSlide 定高 CSS 同步)。
+const SCORECARD_RESERVED_PX = 388;
 // 三个分页板块头部预留一致:py-12 上 48 + 标题 text-6xl 60 + mt-10 40 + py-12 下 48。
 const SLIDE_RESERVED_PX = 196;
 // 公告安全封顶(设计 §4:原 slice(0,5) 截断改为 cap 40 后分页)。
@@ -161,6 +167,8 @@ export default function TvApp() {
   // 每板块每页容量(设计 §3)。三个榜单共用一套行 CSS → 同一容量;goal_progress 不分页恒 1。
   const perPage = useMemo<Record<SlideKey, number>>(() => {
     const leaderboard = pageSize(windowHeight - SLIDE_RESERVED_PX, LEADERBOARD_ITEM_PX);
+    // MTD/YTD 两个 scorecard section 共用同一套行 CSS → 同一容量。
+    const scorecardPerPage = pageSize(windowHeight - SCORECARD_RESERVED_PX, SCORECARD_ITEM_PX);
     return {
       leaderboard_sales_count: leaderboard,
       leaderboard_gci: leaderboard,
@@ -168,6 +176,8 @@ export default function TvApp() {
       goal_progress: 1,
       listings: gridPageSize(windowHeight - SLIDE_RESERVED_PX, LISTINGS_ROW_PX, LISTINGS_COLUMNS),
       announcements: pageSize(windowHeight - SLIDE_RESERVED_PX, ANNOUNCEMENT_ITEM_PX),
+      scorecard: scorecardPerPage,
+      scorecard_ytd: scorecardPerPage,
     };
   }, [windowHeight]);
 
@@ -182,6 +192,8 @@ export default function TvApp() {
       goal_progress: 1, // 恒 1 页;GoalSlide 自身 slice(0,4) 不动(非目标)
       listings: tvState.listings.length,
       announcements: Math.min(tvState.announcements.length, ANNOUNCEMENTS_CAP),
+      scorecard: tvState.scorecard.rows.length,
+      scorecard_ytd: tvState.scorecardYtd.rows.length,
     };
     const nextSlides = expandSlides(tvState.settings.slides.filter((s) => s.enabled), counts, perPage);
     if (!sameSlides(carouselRef.current.slides, nextSlides)) {
@@ -215,6 +227,34 @@ export default function TvApp() {
     }
     const page = currentSlide.page;
     switch (currentSlide.key) {
+      case 'scorecard': {
+        const scorecardRows = tvState.scorecard.rows;
+        return (
+          <ScorecardSlide
+            data={tvState.scorecard}
+            rows={pageSlice(
+              scorecardRows, effectivePage(page, scorecardRows.length, perPage.scorecard),
+              perPage.scorecard,
+            )}
+            heading="SALES SCORECARD"
+            subheading={`${tvState.periodLabel} · MONTH TO DATE`}
+          />
+        );
+      }
+      case 'scorecard_ytd': {
+        const ytdRows = tvState.scorecardYtd.rows;
+        return (
+          <ScorecardSlide
+            data={tvState.scorecardYtd}
+            rows={pageSlice(
+              ytdRows, effectivePage(page, ytdRows.length, perPage.scorecard_ytd),
+              perPage.scorecard_ytd,
+            )}
+            heading="SALES SCORECARD"
+            subheading={`${tvState.fyLabel} · YEAR TO DATE`}
+          />
+        );
+      }
       case 'leaderboard_sales_count': {
         const salesCount = tvState.leaderboards.sales_count;
         return (

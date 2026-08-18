@@ -15,6 +15,7 @@ type ListingRow = {
   photoUrl: string | null;
   listedDate: string;
   status: string;
+  split: number;
 };
 
 const STATUS_OPTIONS = ['active', 'sold', 'withdrawn'] as const;
@@ -27,6 +28,12 @@ function todayLocal(): string {
 function toCents(dollars: string): number | null {
   const cents = Math.round(parseFloat(dollars) * 100);
   return Number.isFinite(cents) ? cents : null;
+}
+
+/** 房源拆分份额(设计 §7b):0 < split ≤ 1;与 toCents 同款 Number.isFinite 兜底。 */
+function parseSplit(value: string): number | null {
+  const split = parseFloat(value);
+  return Number.isFinite(split) && split > 0 && split <= 1 ? split : null;
 }
 
 async function uploadFile(file: File): Promise<string> {
@@ -42,7 +49,7 @@ async function uploadFile(file: File): Promise<string> {
 }
 
 function emptyForm() {
-  return { agentId: '', address: '', listPrice: '', listedDate: todayLocal(), photoUrl: '' };
+  return { agentId: '', address: '', listPrice: '', split: '1', listedDate: todayLocal(), photoUrl: '' };
 }
 
 export default function ListingsPage() {
@@ -101,6 +108,7 @@ export default function ListingsPage() {
       agentId: l.agentId,
       address: l.address,
       listPrice: (l.listPriceCents / 100).toFixed(2),
+      split: String(l.split),
       listedDate: l.listedDate,
       photoUrl: l.photoUrl ?? '',
     });
@@ -140,6 +148,11 @@ export default function ListingsPage() {
       setError('Invalid list price');
       return;
     }
+    const split = parseSplit(form.split);
+    if (split === null) {
+      setError('Invalid split');
+      return;
+    }
     setSaving(true);
     try {
       let res: Response;
@@ -151,6 +164,7 @@ export default function ListingsPage() {
         if (form.agentId !== editingListing.agentId) patch.agentId = form.agentId;
         if (form.address !== editingListing.address) patch.address = form.address;
         if (listPriceCents !== editingListing.listPriceCents) patch.listPriceCents = listPriceCents;
+        if (split !== editingListing.split) patch.split = split;
         if (form.listedDate !== editingListing.listedDate) patch.listedDate = form.listedDate;
         if (form.photoUrl !== (editingListing.photoUrl ?? '')) patch.photoUrl = form.photoUrl || null;
         if (Object.keys(patch).length === 0) {
@@ -170,6 +184,7 @@ export default function ListingsPage() {
             agentId: form.agentId,
             address: form.address,
             listPriceCents,
+            split,
             listedDate: form.listedDate,
             ...(form.photoUrl ? { photoUrl: form.photoUrl } : {}),
           }),
@@ -316,6 +331,17 @@ export default function ListingsPage() {
               min="0"
               value={form.listPrice}
               onChange={(e) => setForm({ ...form, listPrice: e.target.value })}
+              required
+            />
+          </Field>
+          <Field label="Split">
+            <TextInput
+              type="number"
+              step="0.05"
+              min="0.05"
+              max="1"
+              value={form.split}
+              onChange={(e) => setForm({ ...form, split: e.target.value })}
               required
             />
           </Field>

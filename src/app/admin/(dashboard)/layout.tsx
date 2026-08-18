@@ -8,6 +8,7 @@ import { SESSION_COOKIE, type SessionData } from '@/lib/auth/session';
 const NAV = [
   { href: '/admin', label: 'Dashboard' },
   { href: '/admin/agents', label: 'Team' },
+  { href: '/admin/appraisals', label: 'Appraisals' },
   { href: '/admin/listings', label: 'Listings' },
   { href: '/admin/announcements', label: 'Announcements' },
   { href: '/admin/goals', label: 'Goals' },

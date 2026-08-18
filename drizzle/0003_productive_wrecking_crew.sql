@@ -1,0 +1,1 @@
+ALTER TABLE "listings" ADD COLUMN "split" double precision DEFAULT 1 NOT NULL;

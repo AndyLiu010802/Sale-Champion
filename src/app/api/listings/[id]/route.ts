@@ -13,6 +13,7 @@ const patchSchema = z.object({
   photoUrl: z.string().min(1).nullable().optional(),
   listedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'listedDate must be YYYY-MM-DD').optional(),
   status: z.enum(['active', 'sold', 'withdrawn']).optional(),
+  split: z.number().positive().max(1).optional(),
 });
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {

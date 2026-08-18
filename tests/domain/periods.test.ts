@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { periodRange, periodLabel } from '@/lib/domain/periods';
+import { fyLabel, fyToDateRange, periodRange, periodLabel } from '@/lib/domain/periods';
 
 describe('periodRange', () => {
   it('month: mid-month date maps to [1st 00:00, 1st of next month)', () => {
@@ -86,5 +86,37 @@ describe('periodLabel', () => {
 
   it("year → '2026'", () => {
     expect(periodLabel('year', new Date(2026, 7, 17))).toBe('2026');
+  });
+});
+
+describe('fyToDateRange', () => {
+  it('July onwards belongs to the fiscal year starting that July', () => {
+    const { start } = fyToDateRange(new Date(2026, 6, 1, 9, 0));
+    expect(start.getTime()).toBe(new Date(2026, 6, 1).getTime());
+  });
+
+  it('before July belongs to the fiscal year that started the previous July', () => {
+    const { start } = fyToDateRange(new Date(2026, 5, 30, 23, 59));
+    expect(start.getTime()).toBe(new Date(2025, 6, 1).getTime());
+  });
+
+  it('ends at tomorrow 00:00 — today fully included, tomorrow exclusive', () => {
+    const { end } = fyToDateRange(new Date(2026, 7, 18, 15, 30));
+    expect(end.getTime()).toBe(new Date(2026, 7, 19).getTime());
+  });
+
+  it('end rolls across the month boundary', () => {
+    const { end } = fyToDateRange(new Date(2026, 7, 31, 12, 0));
+    expect(end.getTime()).toBe(new Date(2026, 8, 1).getTime());
+  });
+});
+
+describe('fyLabel', () => {
+  it("August 2026 → 'FY 2026–27'", () => {
+    expect(fyLabel(new Date(2026, 7, 18))).toBe('FY 2026–27');
+  });
+
+  it("June 2026 still labels the year that started July 2025 → 'FY 2025–26'", () => {
+    expect(fyLabel(new Date(2026, 5, 30))).toBe('FY 2025–26');
   });
 });

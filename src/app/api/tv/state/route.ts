@@ -1,9 +1,10 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
-import { agents, announcements, goals, listings, sales, screens } from '@/lib/db/schema';
+import { agents, announcements, appraisals, goals, listings, sales, screens } from '@/lib/db/schema';
 import { hashToken } from '@/lib/domain/pairing';
 import { computeLeaderboard, computeMetricTotal, type LeaderboardInputs } from '@/lib/domain/leaderboard';
-import { periodLabel, periodRange } from '@/lib/domain/periods';
+import { computeScorecard } from '@/lib/domain/scorecard';
+import { fyLabel, fyToDateRange, periodLabel, periodRange } from '@/lib/domain/periods';
 import { getSettings } from '@/lib/settings';
 import type { GoalProgress, Metric, TvAnnouncement, TvListing, TvStateResponse } from '@/lib/types';
 
@@ -32,15 +33,16 @@ export async function GET(req: Request): Promise<Response> {
     .where(and(eq(agents.orgId, orgId), eq(agents.role, 'agent')));
   const saleRows = await db.select().from(sales).where(eq(sales.orgId, orgId));
   const listingRows = await db.select().from(listings).where(eq(listings.orgId, orgId));
+  const appraisalRows = await db.select().from(appraisals).where(eq(appraisals.orgId, orgId));
 
   const inputs: LeaderboardInputs = {
     agents: agentRows.map((a) => ({
       id: a.id, name: a.name, photoUrl: a.photoUrl, active: a.active,
     })),
     sales: saleRows.map((s) => ({
-      agentId: s.agentId, gciCents: s.gciCents, saleDate: s.saleDate, createdAt: s.createdAt,
+      agentId: s.agentId, gciCents: s.gciCents, saleDate: s.saleDate, createdAt: s.createdAt, split: s.split,
     })),
-    listings: listingRows.map((l) => ({ agentId: l.agentId, listedDate: l.listedDate })),
+    listings: listingRows.map((l) => ({ agentId: l.agentId, listedDate: l.listedDate, split: l.split })),
   };
 
   const range = periodRange(settings.leaderboardPeriod, now);
@@ -49,6 +51,19 @@ export async function GET(req: Request): Promise<Response> {
     gci: computeLeaderboard(inputs, 'gci', range),
     listings: computeLeaderboard(inputs, 'listings', range),
   };
+
+  // Scorecard 与三榜同周期(设计 §5);周期过滤在 computeScorecard 内完成——
+  // 与 sales/listings 一样整表取 org 行、域层过滤。inputs.sales/listings 结构性兼容
+  // ScorecardInputs(多出的 createdAt/photoUrl 字段无妨)。
+  const scorecardInputs = {
+    agents: agentRows.map((a) => ({ id: a.id, name: a.name, role: a.role, active: a.active })),
+    sales: inputs.sales,
+    listings: inputs.listings,
+    appraisals: appraisalRows.map((a) => ({ agentId: a.agentId, date: a.date, count: a.count })),
+  };
+  const scorecard = computeScorecard(scorecardInputs, range);
+  // YTD 记分卡:澳洲财年 to-date(设计 §7b),与 MTD 同一份输入、只换周期。
+  const scorecardYtd = computeScorecard(scorecardInputs, fyToDateRange(now));
 
   const goalRows = await db.select().from(goals)
     .where(and(eq(goals.orgId, orgId), eq(goals.active, true)))
@@ -90,7 +105,10 @@ export async function GET(req: Request): Promise<Response> {
     goals: goalProgress,
     listings: tvListings,
     announcements: tvAnnouncements,
+    scorecard,
+    scorecardYtd,
     periodLabel: periodLabel(settings.leaderboardPeriod, now),
+    fyLabel: fyLabel(now),
   };
   return Response.json({ data });
 }

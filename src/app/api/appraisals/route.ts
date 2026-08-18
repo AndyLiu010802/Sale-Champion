@@ -2,20 +2,14 @@ import { z } from 'zod';
 import { and, desc, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
-import { agents, sales } from '@/lib/db/schema';
+import { agents, appraisals } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/session';
 import { getHub } from '@/lib/ws/hub';
-import { getSettings } from '@/lib/settings';
-import { buildCelebrationPayload } from '@/lib/domain/celebration';
 
 const createSchema = z.object({
   agentId: z.string().min(1),
-  address: z.string().min(1),
-  salePriceCents: z.number().int().min(0),
-  gciCents: z.number().int().min(0),
-  saleDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'saleDate must be YYYY-MM-DD'),
-  // 成交拆分份额(设计 §2):0 < split ≤ 1;缺省按 1(整单)
-  split: z.number().positive().max(1).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
+  count: z.number().int().min(1).max(999),
 });
 
 export async function GET(req: Request) {
@@ -25,22 +19,18 @@ export async function GET(req: Request) {
   const orgId = await getOrgId(db);
   const rows = await db
     .select({
-      id: sales.id,
-      orgId: sales.orgId,
-      agentId: sales.agentId,
-      address: sales.address,
-      salePriceCents: sales.salePriceCents,
-      gciCents: sales.gciCents,
-      split: sales.split,
-      saleDate: sales.saleDate,
-      createdAt: sales.createdAt,
-      updatedAt: sales.updatedAt,
+      id: appraisals.id,
+      orgId: appraisals.orgId,
+      agentId: appraisals.agentId,
+      date: appraisals.date,
+      count: appraisals.count,
+      createdAt: appraisals.createdAt,
       agentName: agents.name,
     })
-    .from(sales)
-    .innerJoin(agents, eq(sales.agentId, agents.id))
-    .where(eq(sales.orgId, orgId))
-    .orderBy(desc(sales.createdAt))
+    .from(appraisals)
+    .innerJoin(agents, eq(appraisals.agentId, agents.id))
+    .where(eq(appraisals.orgId, orgId))
+    .orderBy(desc(appraisals.date), desc(appraisals.createdAt))
     .limit(50);
   return Response.json({ data: rows });
 }
@@ -63,6 +53,7 @@ export async function POST(req: Request) {
   }
   const db = await getDb();
   const orgId = await getOrgId(db);
+  // 与 sales/listings 同口径:仅 active 的 agent 可录(staff 不做估价)。
   const [agent] = await db
     .select()
     .from(agents)
@@ -76,28 +67,16 @@ export async function POST(req: Request) {
     );
   if (!agent) return Response.json({ error: 'Unknown agent' }, { status: 400 });
 
-  const [sale] = await db
-    .insert(sales)
+  const [appraisal] = await db
+    .insert(appraisals)
     .values({
       id: crypto.randomUUID(),
       orgId,
       agentId: parsed.data.agentId,
-      address: parsed.data.address,
-      salePriceCents: parsed.data.salePriceCents,
-      gciCents: parsed.data.gciCents,
-      split: parsed.data.split ?? 1,
-      saleDate: parsed.data.saleDate,
+      date: parsed.data.date,
+      count: parsed.data.count,
     })
     .returning();
-
-  const settings = await getSettings(db, orgId);
-  const celebration = buildCelebrationPayload(
-    { id: sale.id, address: sale.address, salePriceCents: sale.salePriceCents },
-    { name: agent.name, photoUrl: agent.photoUrl, anthemUrl: agent.anthemUrl },
-    settings,
-  );
-  const hub = getHub();
-  hub.broadcast({ type: 'celebration.play', celebration });
-  hub.broadcast({ type: 'data.updated', domain: 'sales' });
-  return Response.json({ data: sale });
+  getHub().broadcast({ type: 'data.updated', domain: 'appraisals' });
+  return Response.json({ data: appraisal });
 }

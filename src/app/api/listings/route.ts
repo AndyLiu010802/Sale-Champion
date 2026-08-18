@@ -12,6 +12,8 @@ const createSchema = z.object({
   listPriceCents: z.number().int().min(0),
   photoUrl: z.string().min(1).optional(),
   listedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'listedDate must be YYYY-MM-DD'),
+  // 房源拆分份额(设计 §7b):0 < split ≤ 1;缺省按 1(整单)
+  split: z.number().positive().max(1).optional(),
 });
 
 export async function GET(req: Request) {
@@ -29,6 +31,7 @@ export async function GET(req: Request) {
       photoUrl: listings.photoUrl,
       listedDate: listings.listedDate,
       status: listings.status,
+      split: listings.split,
       createdAt: listings.createdAt,
       agentName: agents.name,
     })
@@ -79,6 +82,7 @@ export async function POST(req: Request) {
       listPriceCents: parsed.data.listPriceCents,
       photoUrl: parsed.data.photoUrl ?? null,
       listedDate: parsed.data.listedDate,
+      split: parsed.data.split ?? 1,
     })
     .returning();
   getHub().broadcast({ type: 'data.updated', domain: 'listings' });

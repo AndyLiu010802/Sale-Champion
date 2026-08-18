@@ -101,6 +101,7 @@ describe('GET /api/listings', () => {
     const { data } = await res.json();
     expect(data).toHaveLength(1);
     expect(data[0].agentName).toBe('Alice Ng');
+    expect(data[0].split).toBe(1);
   });
 });
 
@@ -168,6 +169,57 @@ describe('DELETE /api/listings/[id]', () => {
     const list = await (await GET(await authedRequest('/api/listings'))).json();
     expect(list.data).toHaveLength(0);
     expect(events).toEqual([{ type: 'data.updated', domain: 'listings' }]);
+  });
+});
+
+describe('listing split (设计 §7b)', () => {
+  it('creates a listing with an explicit fractional split', async () => {
+    const res = await POST(
+      await authedRequest('/api/listings', { method: 'POST', body: { ...listingBody(), split: 0.66 } }),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.split).toBe(0.66);
+  });
+
+  it('defaults split to 1 when omitted', async () => {
+    const res = await POST(await authedRequest('/api/listings', { method: 'POST', body: listingBody() }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.split).toBe(1);
+  });
+
+  it('rejects out-of-range splits with 400', async () => {
+    for (const split of [0, -0.5, 1.5]) {
+      const res = await POST(
+        await authedRequest('/api/listings', { method: 'POST', body: { ...listingBody(), split } }),
+      );
+      expect(res.status).toBe(400);
+    }
+    expect(events).toEqual([]);
+  });
+
+  it('PATCH updates split and broadcasts data.updated listings', async () => {
+    const created = await (
+      await POST(await authedRequest('/api/listings', { method: 'POST', body: listingBody() }))
+    ).json();
+    events.length = 0;
+
+    const res = await PATCH(
+      await authedRequest(`/api/listings/${created.data.id}`, { method: 'PATCH', body: { split: 0.33 } }),
+      { params: Promise.resolve({ id: created.data.id }) },
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.split).toBe(0.33);
+    expect(events).toEqual([{ type: 'data.updated', domain: 'listings' }]);
+  });
+
+  it('GET list projection includes the custom split value', async () => {
+    await POST(
+      await authedRequest('/api/listings', { method: 'POST', body: { ...listingBody(), split: 0.5 } }),
+    );
+    const res = await GET(await authedRequest('/api/listings'));
+    const { data } = await res.json();
+    expect(data).toHaveLength(1);
+    expect(data[0].split).toBe(0.5);
   });
 });
 

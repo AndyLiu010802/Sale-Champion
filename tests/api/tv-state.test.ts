@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshDb, seedBasics, type Basics } from '../helpers/db';
 import { jsonRequest, authedRequest } from '../helpers/request';
 import type { Db } from '@/lib/db';
-import { agents, announcements, goals, listings, sales, screens } from '@/lib/db/schema';
+import { agents, announcements, appraisals, goals, listings, sales, screens } from '@/lib/db/schema';
 import { generateDeviceToken, hashToken } from '@/lib/domain/pairing';
-import { periodLabel } from '@/lib/domain/periods';
+import { fyLabel, fyToDateRange, periodLabel } from '@/lib/domain/periods';
 import { GET as tvStateGet } from '@/app/api/tv/state/route';
 import { PATCH as AGENTS_PATCH } from '@/app/api/agents/[id]/route';
 
@@ -126,6 +126,64 @@ describe('GET /api/tv/state', () => {
     const { data } = await res.json();
     // 45 条 active 只回 40(安全封顶);listedDate 相同,不断言被截掉的是哪 5 条。
     expect(data.listings).toHaveLength(40);
+  });
+
+  it('assembles the scorecard block (totals, ranked rows, conversion)', async () => {
+    const today = localDateStr(new Date());
+    const bobId = crypto.randomUUID();
+    await db.insert(agents).values({ id: bobId, orgId: basics.orgId, name: 'Bob Ray' });
+
+    await db.insert(sales).values([
+      // Alice:共享成交两行(0.5+0.5)
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, address: '1 Split St', salePriceCents: 0, gciCents: 50000, saleDate: today, split: 0.5 },
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, address: '2 Split St', salePriceCents: 0, gciCents: 50000, saleDate: today, split: 0.5 },
+      // Bob:一行整单,GCI 更高 → rank 1
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: bobId, address: '3 Whole St', salePriceCents: 0, gciCents: 300000, saleDate: today },
+    ]);
+    await db.insert(listings).values([
+      // sold 也计入 listings 指标与 conversion(不上 TV 在售页)
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, address: '10 Beach Rd', listPriceCents: 0, listedDate: today, status: 'sold' },
+    ]);
+    await db.insert(appraisals).values([
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, date: today, count: 4 },
+    ]);
+
+    const res = await tvStateGet(stateRequest(token));
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+
+    expect(data.scorecard.rows).toEqual([
+      { agentId: bobId, name: 'Bob Ray', appraisals: 0, listings: 0, sales: 1, split: 1, gciCents: 300000, conversionPct: null },
+      { agentId: basics.agentId, name: 'Alice Ng', appraisals: 4, listings: 1, sales: 2, split: 1, gciCents: 100000, conversionPct: 25 },
+    ]);
+    expect(data.scorecard.totals).toEqual({ appraisals: 4, listings: 1, salesSplit: 2, gciCents: 400000 });
+  });
+
+  it('assembles the fiscal-year scorecardYtd plus fyLabel (设计 §7b)', async () => {
+    const now = new Date();
+    const fyStartStr = localDateStr(fyToDateRange(now).start);
+    const monthStartStr = localDateStr(new Date(now.getFullYear(), now.getMonth(), 1));
+
+    await db.insert(sales).values([
+      // 本月首日:MTD 与 YTD 都计入
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, address: '1 Month St', salePriceCents: 0, gciCents: 100000, saleDate: monthStartStr },
+      // 财年首日(7 月 1 日):必计入 YTD;仅当"本月"就是 7 月时才同时计入 MTD
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, address: '2 Fiscal St', salePriceCents: 0, gciCents: 200000, saleDate: fyStartStr, split: 0.5 },
+    ]);
+    await db.insert(listings).values([
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, address: '3 Fiscal Rd', listPriceCents: 0, listedDate: fyStartStr, status: 'sold', split: 0.66 },
+    ]);
+
+    const res = await tvStateGet(stateRequest(token));
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+
+    expect(data.fyLabel).toBe(fyLabel(now));
+    // YTD:两笔成交(1 + 0.5)+ 一条 0.66 房源(round1 → 0.7)
+    expect(data.scorecardYtd.totals).toEqual({ appraisals: 0, listings: 0.7, salesSplit: 1.5, gciCents: 300000 });
+    // MTD:7 月里月初 = 财年首日(两行都算);其余月份只算本月首日那行
+    const fyStartIsMonthStart = fyStartStr === monthStartStr;
+    expect(data.scorecard.totals.gciCents).toBe(fyStartIsMonthStart ? 300000 : 100000);
   });
 
   it('caps goal percent at 100', async () => {

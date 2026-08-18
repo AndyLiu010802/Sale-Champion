@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const PAIR_CODE_RE = /^[23456789A-HJ-NP-Z]{6}$/;
 const SLIDE_TITLE_RE =
-  /SALES CHAMPIONS|TOP EARNERS|LISTING LEGENDS|TEAM GOALS|HOT LISTINGS|TEAM NEWS/;
+  /SALES SCORECARD|SALES CHAMPIONS|TOP EARNERS|LISTING LEGENDS|TEAM GOALS|HOT LISTINGS|TEAM NEWS/;
 
 test('pairing code shows on tv', async ({ browser }) => {
   const tvPage = await browser.newPage();
@@ -155,18 +155,35 @@ test('manual birthday broadcast shows on tv', async ({ browser }) => {
 });
 
 test('paginates a slide across rotations on short screens', async ({ browser }) => {
-  test.setTimeout(120_000); // login+pair+15s rotation to page 2 leaves little room in the default 60s
-  // 520px tall: each leaderboard fits 3 rows per page ((520-196)/84 → 3) and the demo
-  // seed ranks 4 agents on every board → 2 pages (3 + 1).
+  test.setTimeout(120_000); // login+pair+20s rotation to page 2 leaves little room in the default 60s
+  // 520px tall: the MTD scorecard (now first, 20s/page) fits 2 table rows per page
+  // ((520-388)/56 → 2) and the demo seed puts 4 agents on it → 2 pages (2 + 2);
+  // the YTD scorecard follows with the same split, then the leaderboards (3 + 1).
   const { adminPage, tvPage } = await pairTv(browser, 'E2E TV 4', {
     tvViewport: { width: 1280, height: 520 },
   });
 
-  // First slide (sales leaderboard, 15s per page) shows the page badge immediately.
+  // First slide (MTD scorecard, 20s per page) shows the page badge immediately.
   // exact: true — substring matching would also hit e.g. '22/2 Ocean Avenue' listings.
   await expect(tvPage.getByText('1/2', { exact: true })).toBeVisible({ timeout: 20000 });
-  // After one full page duration (15s) the same board rotates to its second page.
-  await expect(tvPage.getByText('2/2', { exact: true })).toBeVisible({ timeout: 20000 });
+  // After one full page duration (20s) the same scorecard rotates to its second page.
+  await expect(tvPage.getByText('2/2', { exact: true })).toBeVisible({ timeout: 30000 });
+
+  await adminPage.close();
+  await tvPage.close();
+});
+
+test('scorecard slides show month-to-date then year-to-date', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { adminPage, tvPage } = await pairTv(browser, 'E2E TV 5');
+
+  // 第 1 屏:MTD 记分卡(默认首位,20s/页;标题与文案为设计 §7b 钉死)。
+  await expect(tvPage.getByText('SALES SCORECARD')).toBeVisible({ timeout: 20000 });
+  await expect(tvPage.getByText('MONTH TO DATE')).toBeVisible({ timeout: 5000 });
+  await expect(tvPage.getByText('TOTAL GROSS COMM')).toBeVisible({ timeout: 5000 });
+
+  // 第 2 屏:YTD 记分卡(第二位),等一个完整 durationSec(20s)后出现。
+  await expect(tvPage.getByText('YEAR TO DATE')).toBeVisible({ timeout: 30000 });
 
   await adminPage.close();
   await tvPage.close();

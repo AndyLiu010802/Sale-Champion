@@ -13,6 +13,7 @@ type SaleRow = {
   address: string;
   salePriceCents: number;
   gciCents: number;
+  split: number;
   saleDate: string;
 };
 
@@ -26,8 +27,14 @@ function toCents(dollars: string): number | null {
   return Number.isFinite(cents) ? cents : null;
 }
 
+/** 拆分份额(设计 §6):0 < split ≤ 1;与 toCents 同款 Number.isFinite 兜底。 */
+function parseSplit(value: string): number | null {
+  const split = parseFloat(value);
+  return Number.isFinite(split) && split > 0 && split <= 1 ? split : null;
+}
+
 function emptyForm() {
-  return { agentId: '', address: '', salePrice: '', gci: '', saleDate: todayLocal() };
+  return { agentId: '', address: '', salePrice: '', gci: '', split: '1', saleDate: todayLocal() };
 }
 
 export default function DashboardPage() {
@@ -80,6 +87,11 @@ export default function DashboardPage() {
       setError('Invalid amount');
       return;
     }
+    const split = parseSplit(form.split);
+    if (split === null) {
+      setError('Invalid split');
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch('/api/sales', {
@@ -90,6 +102,7 @@ export default function DashboardPage() {
           address: form.address,
           salePriceCents,
           gciCents,
+          split,
           saleDate: form.saleDate,
         }),
       });
@@ -113,6 +126,7 @@ export default function DashboardPage() {
       address: sale.address,
       salePrice: (sale.salePriceCents / 100).toFixed(2),
       gci: (sale.gciCents / 100).toFixed(2),
+      split: String(sale.split),
       saleDate: sale.saleDate,
     });
   }
@@ -133,6 +147,11 @@ export default function DashboardPage() {
       setError('Invalid amount');
       return;
     }
+    const split = parseSplit(editForm.split);
+    if (split === null) {
+      setError('Invalid split');
+      return;
+    }
 
     // Diff-only PATCH: only send fields that actually changed from the original sale.
     // Sending an unchanged agentId would still re-trigger the API's active-agent check,
@@ -143,6 +162,7 @@ export default function DashboardPage() {
     if (editForm.address !== editing.address) patch.address = editForm.address;
     if (salePriceCents !== editing.salePriceCents) patch.salePriceCents = salePriceCents;
     if (gciCents !== editing.gciCents) patch.gciCents = gciCents;
+    if (split !== editing.split) patch.split = split;
     if (editForm.saleDate !== editing.saleDate) patch.saleDate = editForm.saleDate;
 
     if (Object.keys(patch).length === 0) {
@@ -201,7 +221,7 @@ export default function DashboardPage() {
 
       <form onSubmit={createSale} className="mb-8 rounded-lg border border-panel-2 bg-panel p-6">
         <h2 className="mb-4 font-heading text-lg font-bold text-ink">Record a sale</h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
           <Field label="Agent">
             <Select
               value={form.agentId}
@@ -241,6 +261,17 @@ export default function DashboardPage() {
               min="0"
               value={form.gci}
               onChange={(e) => setForm({ ...form, gci: e.target.value })}
+              required
+            />
+          </Field>
+          <Field label="Split">
+            <TextInput
+              type="number"
+              step="0.05"
+              min="0.05"
+              max="1"
+              value={form.split}
+              onChange={(e) => setForm({ ...form, split: e.target.value })}
               required
             />
           </Field>
@@ -344,6 +375,17 @@ export default function DashboardPage() {
               min="0"
               value={editForm.gci}
               onChange={(e) => setEditForm({ ...editForm, gci: e.target.value })}
+              required
+            />
+          </Field>
+          <Field label="Split">
+            <TextInput
+              type="number"
+              step="0.05"
+              min="0.05"
+              max="1"
+              value={editForm.split}
+              onChange={(e) => setEditForm({ ...editForm, split: e.target.value })}
               required
             />
           </Field>
