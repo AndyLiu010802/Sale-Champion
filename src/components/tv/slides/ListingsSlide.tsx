@@ -29,14 +29,14 @@ export default function ListingsSlide({ listings }: { listings: TvListing[] }) {
           <p className="text-4xl text-muted">No data yet</p>
         </div>
       ) : (
-        <div className="mt-10 grid flex-1 grid-cols-4 grid-rows-2 gap-6">
-          {listings.slice(0, 8).map((listing, i) => (
+        <div className="mt-10 grid flex-1 content-start grid-cols-4 gap-6 overflow-hidden">
+          {listings.map((listing, i) => (
             <motion.div
               key={listing.id}
               initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: i * 0.07, duration: 0.35 }}
-              className="flex flex-col overflow-hidden rounded-xl bg-panel"
+              className="flex h-[400px] flex-col overflow-hidden rounded-xl bg-panel"
             >
               <ListingPhoto key={listing.photoUrl ?? 'none'} photoUrl={listing.photoUrl} address={listing.address} />
               <div className="flex flex-1 flex-col justify-between p-5">

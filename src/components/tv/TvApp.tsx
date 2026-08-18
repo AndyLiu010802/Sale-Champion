@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTvSocket } from '@/hooks/useTvSocket';
 import { carouselReducer, initCarousel, type CarouselSlide, type QueuedCelebration } from '@/lib/carousel';
+import { expandSlides, gridPageSize, pageSize, pageSlice } from '@/lib/pagination';
+import type { SlideKey } from '@/lib/settings';
 import type { TvStateResponse } from '@/lib/types';
 import PairingScreen from '@/components/tv/PairingScreen';
 import StartOverlay from '@/components/tv/StartOverlay';
@@ -14,20 +16,50 @@ import GoalSlide from '@/components/tv/slides/GoalSlide';
 import ListingsSlide from '@/components/tv/slides/ListingsSlide';
 import AnnouncementSlide from '@/components/tv/slides/AnnouncementSlide';
 
-/** Order-sensitive shallow compare so an identical settings payload never resets the current slide's countdown. */
+// —— 每页容量常量:像素值与各 slide 组件的定高 CSS 同步,改组件样式必须同步这里 ——
+// LeaderboardSlide:行 h-[72px] + 行间 gap-3(12px)。
+const LEADERBOARD_ITEM_PX = 84;
+// ListingsSlide:卡 h-[400px] + gap-6(24px);列数固定 4(grid-cols-4)。
+const LISTINGS_ROW_PX = 424;
+const LISTINGS_COLUMNS = 4;
+// AnnouncementSlide:卡 h-[224px] + 卡间 gap-6(24px)。
+const ANNOUNCEMENT_ITEM_PX = 248;
+// 三个分页板块头部预留一致:py-12 上 48 + 标题 text-6xl 60 + mt-10 40 + py-12 下 48。
+const SLIDE_RESERVED_PX = 196;
+// 公告安全封顶(设计 §4:原 slice(0,5) 截断改为 cap 40 后分页)。
+const ANNOUNCEMENTS_CAP = 40;
+
+/** Order-sensitive shallow compare so an identical settings payload never resets the
+ *  current slide's countdown. 展开队列后比较维度含 page/pageCount(设计 §2)。 */
 function sameSlides(a: CarouselSlide[], b: CarouselSlide[]): boolean {
   if (a.length !== b.length) return false;
-  return a.every((s, i) => s.key === b[i].key && s.durationSec === b[i].durationSec);
+  return a.every((s, i) =>
+    s.key === b[i].key && s.durationSec === b[i].durationSec
+    && s.page === b[i].page && s.pageCount === b[i].pageCount);
+}
+
+/** window.innerHeight,监听 resize;SSR 渲染期取 1080 兜底(客户端首次渲染即真实值)。 */
+function useWindowHeight(): number {
+  const [height, setHeight] = useState(() =>
+    (typeof window === 'undefined' ? 1080 : window.innerHeight));
+  useEffect(() => {
+    const onResize = () => setHeight(window.innerHeight);
+    onResize(); // 挂载即校正一次,防 SSR 兜底值残留
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return height;
 }
 
 export default function TvApp() {
   const [tvState, setTvState] = useState<TvStateResponse | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [carousel, dispatch] = useReducer(carouselReducer, [], initCarousel);
+  const windowHeight = useWindowHeight();
 
-  // Mirrors `carousel` for refreshState to read without becoming a dependency of it —
-  // keeps refreshState's identity stable across ticks/celebrations while still letting
-  // it compare against the latest slides before dispatching.
+  // Mirrors `carousel` for the expand effect to read without becoming a dependency —
+  // keeps effect identities stable across ticks/celebrations while still letting
+  // them compare against the latest slides before dispatching.
   const carouselRef = useRef(carousel);
   useEffect(() => {
     carouselRef.current = carousel;
@@ -62,17 +94,8 @@ export default function TvApp() {
       if (!res.ok) return;
       const json = (await res.json()) as { data: TvStateResponse };
       if (seq !== requestSeq.current) return; // re-check: a newer refresh may have started while awaiting res.json()
+      // setSlides 不在这里发:展开队列由数据与窗口高度共同决定,统一交给下面的 effect。
       setTvState(json.data);
-      // 过渡态(Task 2):CarouselSlide 已带 page/pageCount,先恒单页;
-      // Task 3 换成 expandSlides 按屏幕高度真正展开。
-      const nextSlides = json.data.settings.slides
-        .filter((s) => s.enabled)
-        .map((s) => ({ key: s.key, durationSec: s.durationSec, page: 0, pageCount: 1 }));
-      // Guard: skip the dispatch when slides are unchanged so a data.updated event
-      // (which triggers this refresh) doesn't reset the current slide's countdown.
-      if (!sameSlides(carouselRef.current.slides, nextSlides)) {
-        dispatch({ type: 'setSlides', slides: nextSlides });
-      }
     } catch (err) {
       console.warn('Failed to fetch TV state', err);
     }
@@ -127,6 +150,37 @@ export default function TvApp() {
     return () => clearInterval(timer);
   }, [audioUnlocked, socket.phase]);
 
+  // 每板块每页容量(设计 §3)。三个榜单共用一套行 CSS → 同一容量;goal_progress 不分页恒 1。
+  const perPage = useMemo<Record<SlideKey, number>>(() => {
+    const leaderboard = pageSize(windowHeight - SLIDE_RESERVED_PX, LEADERBOARD_ITEM_PX);
+    return {
+      leaderboard_sales_count: leaderboard,
+      leaderboard_gci: leaderboard,
+      leaderboard_listings: leaderboard,
+      goal_progress: 1,
+      listings: gridPageSize(windowHeight - SLIDE_RESERVED_PX, LISTINGS_ROW_PX, LISTINGS_COLUMNS),
+      announcements: pageSize(windowHeight - SLIDE_RESERVED_PX, ANNOUNCEMENT_ITEM_PX),
+    };
+  }, [windowHeight]);
+
+  // 数据/设置刷新或窗口高度变化 → 重算展开队列(设计 §2);sameSlides 守卫让相同内容
+  // 不重置当前页倒计时(data.updated 触发的刷新常常内容不变)。
+  useEffect(() => {
+    if (!tvState) return;
+    const counts: Record<SlideKey, number> = {
+      leaderboard_sales_count: tvState.leaderboards.sales_count.length,
+      leaderboard_gci: tvState.leaderboards.gci.length,
+      leaderboard_listings: tvState.leaderboards.listings.length,
+      goal_progress: 1, // 恒 1 页;GoalSlide 自身 slice(0,4) 不动(非目标)
+      listings: tvState.listings.length,
+      announcements: Math.min(tvState.announcements.length, ANNOUNCEMENTS_CAP),
+    };
+    const nextSlides = expandSlides(tvState.settings.slides.filter((s) => s.enabled), counts, perPage);
+    if (!sameSlides(carouselRef.current.slides, nextSlides)) {
+      dispatch({ type: 'setSlides', slides: nextSlides });
+    }
+  }, [tvState, perPage]);
+
   const handleCelebrationDone = useCallback(() => dispatch({ type: 'celebrationDone' }), []);
 
   const handleStart = useCallback(() => {
@@ -151,13 +205,14 @@ export default function TvApp() {
         </div>
       );
     }
+    const page = currentSlide.page;
     switch (currentSlide.key) {
       case 'leaderboard_sales_count':
         return (
           <LeaderboardSlide
             title="SALES CHAMPIONS"
             metric="sales_count"
-            entries={tvState.leaderboards.sales_count}
+            entries={pageSlice(tvState.leaderboards.sales_count, page, perPage.leaderboard_sales_count)}
             periodLabel={tvState.periodLabel}
           />
         );
@@ -166,7 +221,7 @@ export default function TvApp() {
           <LeaderboardSlide
             title="TOP EARNERS"
             metric="gci"
-            entries={tvState.leaderboards.gci}
+            entries={pageSlice(tvState.leaderboards.gci, page, perPage.leaderboard_gci)}
             periodLabel={tvState.periodLabel}
           />
         );
@@ -175,22 +230,28 @@ export default function TvApp() {
           <LeaderboardSlide
             title="LISTING LEGENDS"
             metric="listings"
-            entries={tvState.leaderboards.listings}
+            entries={pageSlice(tvState.leaderboards.listings, page, perPage.leaderboard_listings)}
             periodLabel={tvState.periodLabel}
           />
         );
       case 'goal_progress':
         return <GoalSlide goals={tvState.goals} />;
       case 'listings':
-        return <ListingsSlide listings={tvState.listings} />;
+        return <ListingsSlide listings={pageSlice(tvState.listings, page, perPage.listings)} />;
       case 'announcements':
-        return <AnnouncementSlide announcements={tvState.announcements.slice(0, 5)} />;
+        return (
+          <AnnouncementSlide
+            announcements={pageSlice(
+              tvState.announcements.slice(0, ANNOUNCEMENTS_CAP), page, perPage.announcements,
+            )}
+          />
+        );
       default:
         return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- currentSlide is derived
     // purely from carousel.index/carousel.slides, both already listed below.
-  }, [carousel.index, carousel.slides, tvState]);
+  }, [carousel.index, carousel.slides, tvState, perPage]);
 
   if (socket.phase === 'connecting' || socket.phase === 'pairing') {
     return <PairingScreen pairCode={socket.pairCode} />;
@@ -210,6 +271,16 @@ export default function TvApp() {
           {slideContent}
         </motion.div>
       </AnimatePresence>
+
+      {/* 页码角标(设计 §2):多页才显示;右上角弱霓虹,避开右下 OfflineBadge。 */}
+      {currentSlide && currentSlide.pageCount > 1 ? (
+        <div
+          className="fixed right-8 top-8 z-40 font-heading text-3xl text-muted"
+          style={{ textShadow: '0 0 12px rgba(0, 229, 255, 0.35)' }}
+        >
+          {currentSlide.page + 1}/{currentSlide.pageCount}
+        </div>
+      ) : null}
 
       <AnimatePresence>
         {carousel.mode === 'celebrate' && carousel.current ? (

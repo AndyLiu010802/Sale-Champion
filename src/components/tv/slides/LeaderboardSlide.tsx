@@ -60,7 +60,7 @@ export default function LeaderboardSlide({
           <p className="text-4xl text-muted">No data yet</p>
         </div>
       ) : (
-        <div className="mt-10 flex flex-1 flex-col justify-start gap-3">
+        <div className="mt-10 flex flex-1 flex-col justify-start gap-3 overflow-hidden">
           {entries.map((entry, i) => (
             <motion.div
               key={entry.agentId}
@@ -68,7 +68,7 @@ export default function LeaderboardSlide({
               initial={{ opacity: 0, x: -40 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.06, duration: 0.35 }}
-              className={`flex items-center gap-8 rounded-lg border-l-4 bg-panel px-8 py-2 ${rowBorderClass(entry.rank)}`}
+              className={`flex h-[72px] shrink-0 items-center gap-8 rounded-lg border-l-4 bg-panel px-8 ${rowBorderClass(entry.rank)}`}
             >
               <span className={`w-16 text-center font-display text-4xl ${rankBadgeClass(entry.rank)}`}>
                 {entry.rank}

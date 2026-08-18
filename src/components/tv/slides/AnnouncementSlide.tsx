@@ -33,7 +33,7 @@ export default function AnnouncementSlide({ announcements }: { announcements: Tv
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1, duration: 0.35 }}
-              className="flex items-start gap-8 rounded-xl bg-panel p-8"
+              className="flex h-[224px] shrink-0 items-start gap-8 rounded-xl bg-panel p-8"
             >
               <div className="flex-1">
                 <h2 className="truncate font-heading text-4xl text-ink">{a.title}</h2>
