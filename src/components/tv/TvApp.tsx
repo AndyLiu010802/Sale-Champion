@@ -63,9 +63,11 @@ export default function TvApp() {
       const json = (await res.json()) as { data: TvStateResponse };
       if (seq !== requestSeq.current) return; // re-check: a newer refresh may have started while awaiting res.json()
       setTvState(json.data);
+      // 过渡态(Task 2):CarouselSlide 已带 page/pageCount,先恒单页;
+      // Task 3 换成 expandSlides 按屏幕高度真正展开。
       const nextSlides = json.data.settings.slides
         .filter((s) => s.enabled)
-        .map((s) => ({ key: s.key, durationSec: s.durationSec }));
+        .map((s) => ({ key: s.key, durationSec: s.durationSec, page: 0, pageCount: 1 }));
       // Guard: skip the dispatch when slides are unchanged so a data.updated event
       // (which triggers this refresh) doesn't reset the current slide's countdown.
       if (!sameSlides(carouselRef.current.slides, nextSlides)) {

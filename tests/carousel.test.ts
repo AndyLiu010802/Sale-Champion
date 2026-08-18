@@ -5,14 +5,14 @@ import {
 } from '@/lib/carousel';
 
 const slides: CarouselSlide[] = [
-  { key: 'leaderboard_sales_count', durationSec: 10 },
-  { key: 'leaderboard_gci', durationSec: 15 },
-  { key: 'goal_progress', durationSec: 5 },
+  { key: 'leaderboard_sales_count', durationSec: 10, page: 0, pageCount: 1 },
+  { key: 'leaderboard_gci', durationSec: 15, page: 0, pageCount: 1 },
+  { key: 'goal_progress', durationSec: 5, page: 0, pageCount: 1 },
 ];
 
 const altSlides: CarouselSlide[] = [
-  { key: 'listings', durationSec: 12 },
-  { key: 'announcements', durationSec: 8 },
+  { key: 'listings', durationSec: 12, page: 0, pageCount: 1 },
+  { key: 'announcements', durationSec: 8, page: 0, pageCount: 1 },
 ];
 
 function payload(id: string): QueuedCelebration {

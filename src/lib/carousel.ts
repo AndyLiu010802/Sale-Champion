@@ -1,7 +1,9 @@
 import type { CelebrationPayload } from './ws/protocol';
 import type { SlideKey } from './settings';
 
-export type CarouselSlide = { key: SlideKey; durationSec: number };
+// page/pageCount:展开式轮播队列(设计 §2)——一个板块的第 page 页(0 起)在队列里是
+// 独立一步,享有该板块完整 durationSec;reducer 推进逻辑不感知分页(数组变长而已)。
+export type CarouselSlide = { key: SlideKey; durationSec: number; page: number; pageCount: number };
 
 // clientId:TV 端收到事件时本地生成的稳定挂载键——同一 payload(如同一 sale 连续
 // replay)也会重挂载 overlay;sale/birthday 两种 kind 统一用它当 React key。

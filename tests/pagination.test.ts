@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { pageSize, gridPageSize, pageCount, pageSlice } from '@/lib/pagination';
+import { expandSlides, pageSize, gridPageSize, pageCount, pageSlice } from '@/lib/pagination';
+import type { SlideConfig } from '@/lib/settings';
 
 describe('pageSize', () => {
   it('floors the available height to whole items', () => {
@@ -69,5 +70,38 @@ describe('pageSlice', () => {
 
   it('an out-of-range page is an empty array', () => {
     expect(pageSlice(items, 5, 3)).toEqual([]);
+  });
+});
+
+describe('expandSlides', () => {
+  const enabled = (key: SlideConfig['key'], durationSec: number): SlideConfig =>
+    ({ key, enabled: true, durationSec });
+
+  it('expands a multi-page slide into consecutive steps sharing the full duration', () => {
+    const out = expandSlides(
+      [enabled('leaderboard_sales_count', 15), enabled('listings', 12)],
+      { leaderboard_sales_count: 4, listings: 3 },
+      { leaderboard_sales_count: 3, listings: 8 },
+    );
+    expect(out).toEqual([
+      { key: 'leaderboard_sales_count', durationSec: 15, page: 0, pageCount: 2 },
+      { key: 'leaderboard_sales_count', durationSec: 15, page: 1, pageCount: 2 },
+      { key: 'listings', durationSec: 12, page: 0, pageCount: 1 },
+    ]);
+  });
+
+  it('single-page slides expand to exactly one step', () => {
+    const out = expandSlides([enabled('announcements', 10)], { announcements: 5 }, { announcements: 5 });
+    expect(out).toEqual([{ key: 'announcements', durationSec: 10, page: 0, pageCount: 1 }]);
+  });
+
+  it('zero items still yield one page (renders the existing "No data yet")', () => {
+    const out = expandSlides([enabled('listings', 12)], { listings: 0 }, { listings: 8 });
+    expect(out).toEqual([{ key: 'listings', durationSec: 12, page: 0, pageCount: 1 }]);
+  });
+
+  it('missing counts/perPage entries default to 0 items on 1-per-page (single page)', () => {
+    const out = expandSlides([enabled('goal_progress', 10)], {}, {});
+    expect(out).toEqual([{ key: 'goal_progress', durationSec: 10, page: 0, pageCount: 1 }]);
   });
 });
