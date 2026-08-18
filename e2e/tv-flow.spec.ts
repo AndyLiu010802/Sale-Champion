@@ -120,3 +120,29 @@ test('tv shows offline badge and keeps rotating while disconnected', async ({ br
   await adminPage.close();
   await tvPage.close();
 });
+
+test('manual birthday broadcast shows on tv', async ({ browser }) => {
+  test.setTimeout(120_000); // login+pair+18s celebration leaves little room in the default 60s
+  const { adminPage, tvPage } = await pairTv(browser, 'E2E TV 3');
+
+  // 5. Admin fires a manual birthday broadcast from the Team page. The endpoint
+  // ignores the actual birthday date, so any seeded active member works.
+  await adminPage.goto('/admin/agents');
+  const broadcastBtn = adminPage
+    .getByRole('button', { name: 'Play birthday broadcast' })
+    .first();
+  await expect(broadcastBtn).toBeVisible({ timeout: 10000 });
+  await broadcastBtn.click();
+
+  // 6. TV interrupts the carousel with the birthday celebration.
+  await expect(tvPage.getByText('HAPPY BIRTHDAY')).toBeVisible({ timeout: 15000 });
+
+  // 7. Celebration (default 18s) finishes and the carousel resumes.
+  await expect(tvPage.getByText('HAPPY BIRTHDAY')).toBeHidden({ timeout: 30000 });
+  await expect(tvPage.getByText(SLIDE_TITLE_RE).first()).toBeVisible({
+    timeout: 10000,
+  });
+
+  await adminPage.close();
+  await tvPage.close();
+});
