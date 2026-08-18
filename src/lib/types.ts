@@ -24,11 +24,6 @@ export type GoalProgress = {
   percent: number; // 0-100, rounded, capped at 100
 };
 
-export type TvListing = {
-  id: string; address: string; listPriceCents: number;
-  photoUrl: string | null; agentName: string;
-};
-
 export type TvAnnouncement = { id: string; title: string; body: string | null; imageUrl: string | null };
 
 export type TvScreenInfo = { id: string; name: string };
@@ -38,7 +33,6 @@ export type TvStateResponse = {
   settings: SettingsData;
   leaderboards: Record<Metric, LeaderboardEntry[]>;  // all three metrics
   goals: GoalProgress[];                              // active only
-  listings: TvListing[];                              // status='active', listedDate desc, limit 40
   announcements: TvAnnouncement[];                    // enabled only, sortOrder asc
   scorecard: ScorecardData;                           // 设计 §5:全指标 0 不成行,gciCents desc
   scorecardYtd: ScorecardData;                        // 设计 §7b:澳洲财年 to-date,同一形状

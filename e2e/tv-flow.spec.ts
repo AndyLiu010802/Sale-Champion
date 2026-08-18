@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const PAIR_CODE_RE = /^[23456789A-HJ-NP-Z]{6}$/;
 const SLIDE_TITLE_RE =
-  /SALES SCORECARD|SALES CHAMPIONS|TOP EARNERS|LISTING LEGENDS|TEAM GOALS|HOT LISTINGS|TEAM NEWS/;
+  /SALES SCORECARD|SALES CHAMPIONS|TOP EARNERS|LISTING LEGENDS|TEAM GOALS|TEAM NEWS/;
 
 test('pairing code shows on tv', async ({ browser }) => {
   const tvPage = await browser.newPage();

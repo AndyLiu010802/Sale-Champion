@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { agents, announcements, appraisals, goals, listings, sales, screens } from '@/lib/db/schema';
 import { hashToken } from '@/lib/domain/pairing';
@@ -6,7 +6,7 @@ import { computeLeaderboard, computeMetricTotal, type LeaderboardInputs } from '
 import { computeScorecard } from '@/lib/domain/scorecard';
 import { fyLabel, fyToDateRange, periodLabel, periodRange } from '@/lib/domain/periods';
 import { getSettings } from '@/lib/settings';
-import type { GoalProgress, Metric, TvAnnouncement, TvListing, TvStateResponse } from '@/lib/types';
+import type { GoalProgress, Metric, TvAnnouncement, TvStateResponse } from '@/lib/types';
 
 export async function GET(req: Request): Promise<Response> {
   const token = req.headers.get('x-device-token');
@@ -78,19 +78,6 @@ export async function GET(req: Request): Promise<Response> {
     return { id: g.id, metric, period, targetValue: g.targetValue, currentValue, percent };
   });
 
-  const tvListings: TvListing[] = await db.select({
-    id: listings.id,
-    address: listings.address,
-    listPriceCents: listings.listPriceCents,
-    photoUrl: listings.photoUrl,
-    agentName: agents.name,
-  }).from(listings)
-    .innerJoin(agents, eq(listings.agentId, agents.id))
-    .where(and(eq(listings.orgId, orgId), eq(listings.status, 'active')))
-    .orderBy(desc(listings.listedDate))
-    // 安全封顶:电视端分页后全量展示,40 仅防极端数据撑爆载荷(设计 §4)。
-    .limit(40);
-
   const annRows = await db.select().from(announcements)
     .where(and(eq(announcements.orgId, orgId), eq(announcements.enabled, true)))
     .orderBy(asc(announcements.sortOrder));
@@ -103,7 +90,6 @@ export async function GET(req: Request): Promise<Response> {
     settings,
     leaderboards,
     goals: goalProgress,
-    listings: tvListings,
     announcements: tvAnnouncements,
     scorecard,
     scorecardYtd,

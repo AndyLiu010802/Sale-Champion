@@ -8,11 +8,6 @@ export function pageSize(availablePx: number, itemPx: number): number {
   return Math.max(1, Math.floor(availablePx / itemPx));
 }
 
-/** 网格容量:列数 × max(1, floor(可用高度 ÷ 行高))。 */
-export function gridPageSize(availablePx: number, rowPx: number, columns: number): number {
-  return columns * Math.max(1, Math.floor(availablePx / rowPx));
-}
-
 /** 页数:0 条(或负数)→ 1 页(渲染既有 "No data yet");否则 ceil(total ÷ perPage)。 */
 export function pageCount(total: number, perPage: number): number {
   if (total <= 0) return 1;

@@ -13,7 +13,6 @@ const SLIDE_LABELS: Record<SlideKey, string> = {
   leaderboard_gci: 'Top Earners (GCI)',
   leaderboard_listings: 'Listing Legends (new listings)',
   goal_progress: 'Team Goals',
-  listings: 'Hot Listings',
   announcements: 'Team News',
 };
 

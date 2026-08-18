@@ -1,8 +1,8 @@
 # Sales Champions TV
 
 A Spinify-style sales leaderboard for real-estate offices. An office TV runs a
-full-screen, esports-styled carousel of sales leaderboards, team goal progress,
-hot listings and announcements — and the moment a sale is recorded in the admin
+full-screen, esports-styled carousel of sales scorecards, leaderboards, team
+goal progress and announcements — and the moment a sale is recorded in the admin
 console, every TV interrupts its carousel to play a full-screen celebration
 with the agent's personal anthem.
 
@@ -104,6 +104,11 @@ See `.env.example` for the authoritative list:
   8-key defaults, silently dropping any custom slide order, enabled/disabled
   toggles or per-slide durations. An admin needs to reconfigure slides once
   after that upgrade.
+- **Upgrading past the TV cleanup commit resets TV slide customization once
+  more.** The Hot Listings carousel slide was removed entirely, shrinking the
+  slide list from 8 keys to 7; a stored 8-key settings row fails validation on
+  first read and falls back to the new 7-key defaults (same mechanism as the
+  previous upgrades). Reconfigure slides once after upgrading.
 
 ## Importing real data
 

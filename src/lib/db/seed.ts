@@ -16,7 +16,6 @@ const DEFAULT_SETTINGS_DATA = {
     { key: 'leaderboard_gci', enabled: true, durationSec: 15 },
     { key: 'leaderboard_listings', enabled: true, durationSec: 15 },
     { key: 'goal_progress', enabled: true, durationSec: 10 },
-    { key: 'listings', enabled: true, durationSec: 12 },
     { key: 'announcements', enabled: true, durationSec: 10 },
   ],
   leaderboardPeriod: 'month',

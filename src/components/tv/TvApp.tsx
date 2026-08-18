@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTvSocket } from '@/hooks/useTvSocket';
 import { carouselReducer, initCarousel, type CarouselSlide, type QueuedCelebration } from '@/lib/carousel';
-import { expandSlides, gridPageSize, pageSize, pageSlice } from '@/lib/pagination';
+import { expandSlides, pageSize, pageSlice } from '@/lib/pagination';
 import type { SlideKey } from '@/lib/settings';
 import type { TvStateResponse } from '@/lib/types';
 import PairingScreen from '@/components/tv/PairingScreen';
@@ -14,15 +14,11 @@ import CelebrationOverlay from '@/components/tv/CelebrationOverlay';
 import LeaderboardSlide from '@/components/tv/slides/LeaderboardSlide';
 import ScorecardSlide from '@/components/tv/slides/ScorecardSlide';
 import GoalSlide from '@/components/tv/slides/GoalSlide';
-import ListingsSlide from '@/components/tv/slides/ListingsSlide';
 import AnnouncementSlide from '@/components/tv/slides/AnnouncementSlide';
 
 // —— 每页容量常量:像素值与各 slide 组件的定高 CSS 同步,改组件样式必须同步这里 ——
 // LeaderboardSlide:行 h-[72px] + 行间 gap-3(12px)。
 const LEADERBOARD_ITEM_PX = 84;
-// ListingsSlide:卡 h-[400px] + gap-6(24px);列数固定 4(grid-cols-4)。
-const LISTINGS_ROW_PX = 424;
-const LISTINGS_COLUMNS = 4;
 // AnnouncementSlide:卡 h-[224px] + 卡间 gap-6(24px)。
 const ANNOUNCEMENT_ITEM_PX = 248;
 // ScorecardSlide:表格行 h-[56px](border-collapse,行间无边框无间距);MTD/YTD 共用。
@@ -174,7 +170,6 @@ export default function TvApp() {
       leaderboard_gci: leaderboard,
       leaderboard_listings: leaderboard,
       goal_progress: 1,
-      listings: gridPageSize(windowHeight - SLIDE_RESERVED_PX, LISTINGS_ROW_PX, LISTINGS_COLUMNS),
       announcements: pageSize(windowHeight - SLIDE_RESERVED_PX, ANNOUNCEMENT_ITEM_PX),
       scorecard: scorecardPerPage,
       scorecard_ytd: scorecardPerPage,
@@ -190,7 +185,6 @@ export default function TvApp() {
       leaderboard_gci: tvState.leaderboards.gci.length,
       leaderboard_listings: tvState.leaderboards.listings.length,
       goal_progress: 1, // 恒 1 页;GoalSlide 自身 slice(0,4) 不动(非目标)
-      listings: tvState.listings.length,
       announcements: Math.min(tvState.announcements.length, ANNOUNCEMENTS_CAP),
       scorecard: tvState.scorecard.rows.length,
       scorecard_ytd: tvState.scorecardYtd.rows.length,
@@ -298,16 +292,6 @@ export default function TvApp() {
       }
       case 'goal_progress':
         return <GoalSlide goals={tvState.goals} />;
-      case 'listings': {
-        const listings = tvState.listings;
-        return (
-          <ListingsSlide
-            listings={pageSlice(
-              listings, effectivePage(page, listings.length, perPage.listings), perPage.listings,
-            )}
-          />
-        );
-      }
       case 'announcements': {
         const announcements = tvState.announcements.slice(0, ANNOUNCEMENTS_CAP);
         return (
