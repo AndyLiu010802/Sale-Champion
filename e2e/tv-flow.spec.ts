@@ -16,10 +16,17 @@ test('pairing code shows on tv', async ({ browser }) => {
  * Shared flow: sign the admin in, pair a fresh TV page, click through the
  * audio-unlock overlay and wait for the carousel. Returns both pages.
  */
-async function pairTv(browser: import('@playwright/test').Browser, screenName: string) {
+async function pairTv(
+  browser: import('@playwright/test').Browser,
+  screenName: string,
+  opts: { tvViewport?: { width: number; height: number } } = {},
+) {
   // Two isolated browser contexts: one admin, one TV.
   const adminPage = await browser.newPage();
   const tvPage = await browser.newPage();
+  // Viewport must be set before goto('/tv') so the first capacity calculation
+  // (window.innerHeight) already sees the target height.
+  if (opts.tvViewport) await tvPage.setViewportSize(opts.tvViewport);
 
   // 1. Admin signs in.
   await adminPage.goto('/admin/login');
@@ -142,6 +149,24 @@ test('manual birthday broadcast shows on tv', async ({ browser }) => {
   await expect(tvPage.getByText(SLIDE_TITLE_RE).first()).toBeVisible({
     timeout: 10000,
   });
+
+  await adminPage.close();
+  await tvPage.close();
+});
+
+test('paginates a slide across rotations on short screens', async ({ browser }) => {
+  test.setTimeout(120_000); // login+pair+15s rotation to page 2 leaves little room in the default 60s
+  // 520px tall: each leaderboard fits 3 rows per page ((520-196)/84 → 3) and the demo
+  // seed ranks 4 agents on every board → 2 pages (3 + 1).
+  const { adminPage, tvPage } = await pairTv(browser, 'E2E TV 4', {
+    tvViewport: { width: 1280, height: 520 },
+  });
+
+  // First slide (sales leaderboard, 15s per page) shows the page badge immediately.
+  // exact: true — substring matching would also hit e.g. '22/2 Ocean Avenue' listings.
+  await expect(tvPage.getByText('1/2', { exact: true })).toBeVisible({ timeout: 20000 });
+  // After one full page duration (15s) the same board rotates to its second page.
+  await expect(tvPage.getByText('2/2', { exact: true })).toBeVisible({ timeout: 20000 });
 
   await adminPage.close();
   await tvPage.close();
