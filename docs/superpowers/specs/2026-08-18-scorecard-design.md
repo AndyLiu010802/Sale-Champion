@@ -64,6 +64,26 @@ scorecard: {
 - 导入名单与数值(7 行,逐行以表格为准):Chris Joyce A4/L3/S3(1+1+1)/$37,998;John Loveluck A4/L1/S2(1.0+0.8)/$28,970;Team Cowley A8/L4/S2(0.5+0.5)/$13,148;Michael Hatzinicolaou A2/L1/S2(0.5+0.5)/$13,148;Hill & Co A13/L2/S2(0.5+0.5)/$11,000;Kathy Roberts A1/L0/S1(0.2)/$4,080;Team Brudenell A4/L0/S0/$0。
 - **已知差异**:逐行 Appraisals 之和为 36,样表表头 TOTAL 为 29(逐行转化率与逐行数值自洽,表头疑为另一口径);按逐行导入,系统总数显示 36。
 
+## 7b. 增量修订(2026-08-18,基于 Year to Date 表确认)
+
+- **记分卡拆两个 section**:SlideKey `'scorecard'`(Month to Date,副标题 periodLabel + MONTH TO DATE)与 `'scorecard_ytd'`(Year to Date,副标题 FY 标签 + YEAR TO DATE),各自开关/时长(默认都启用、20s),SLIDE_KEYS 变 **8 键**(顺序:scorecard, scorecard_ytd, 三榜, goal, listings, announcements)。
+- **YTD 周期 = 澳洲财年**:新纯函数 `fyToDateRange(now)`(7 月 1 日 00:00 起至明日 00:00 排他)与 `fyLabel(now)`(如 `FY 2026–27`);榜单既有 PERIODS 不动。
+- **房源拆分**:`listings.split`(doublePrecision 默认 1,0<x≤1,create/patch zod,后台房源表单加 Split 输入);listings 指标(榜单/goal/scorecard Listings 列)与 **转化率分子** 全部改 **Σsplit**(round1 同款防尘)。
+- tv/state:`scorecard`(按 leaderboardPeriod)与 `scorecardYtd`(按财年)两份 + `fyLabel`;TvStateResponse 相应扩展。
+- **E2E 钉死**:MTD 页标题 `SALES SCORECARD` + 文案 `MONTH TO DATE`;YTD 页文案 `YEAR TO DATE`。
+- **导入含 7 月补录**(YTD−8 月差额,逐行核算已对平总额:补录后 YTD 应为 Σsplit 15、Listings 46.65、GCI $214,822±1、Appraisals 141[表头 120 与逐行 141 同 MTD 类不一致,按逐行]):
+  | 成员 | 7月 Appraisals | 7月 Listings(Σsplit) | 7月成交(参与/Σsplit) | 7月 GCI |
+  |---|---|---|---|---|
+  | Team Brudenell | 22 | 7.66(7×1+0.66) | 6 行 ×0.5 | $49,753 |
+  | Team Cowley | 17 | 17.33(17×1+0.33) | 1.0+0.5+0.5 | $26,125 |
+  | Chris Joyce | 6 | 5 | — | $0 |
+  | John Loveluck | 3 | 1 | — | $0 |
+  | Michael Hatzinicolaou | 5 | 2 | 0.8 | $13,700 |
+  | Kathy Roberts | 0 | 1 | 0.3×4 | $16,900 |
+  | Hill & Co | 52 | 1.66(1+0.66) | — | $0 |
+  日期散布 2026-07-01~31;其余规则(status='sold' 房源、salePriceCents 0、佣金均摊、幂等守卫)同 §7。
+- 老 settings 行(6/7 键)读取回落 8 键新默认,机制同前。
+
 ## 8. 测试
 
 - 单元:computeScorecard(周期过滤/排序/conversion 含 0 与 null/全零成员剔除/totals);Σsplit 口径(computeLeaderboard/computeMetricTotal 的 sales_count 改动 + 既有用例更新);split zod 边界;appraisals API CRUD 与广播;settings 7 键 refine。
