@@ -1,6 +1,8 @@
 // Scorecard 域纯函数(设计 §4/§5):按周期聚合每位 agent 的
 // appraisals / listings / sales(参与笔数)/ split(Σ)/ gci 与 listing conversion。
 
+import { round1 } from '../format';
+
 export type ScorecardInputs = {
   agents: { id: string; name: string; role: string; active: boolean }[];
   sales: { agentId: string; gciCents: number; saleDate: string; split: number }[];  // saleDate 'YYYY-MM-DD'
@@ -35,11 +37,6 @@ function parseLocalDate(dateStr: string): Date {
 function inRange(dateStr: string, range: Range): boolean {
   const t = parseLocalDate(dateStr).getTime();
   return t >= range.start.getTime() && t < range.end.getTime();
-}
-
-/** 1 位小数;顺带清掉 Σsplit 的浮点尘埃,让 toEqual 断言与显示都确定。 */
-function round1(x: number): number {
-  return Math.round(x * 10) / 10;
 }
 
 type Acc = { appraisals: number; listings: number; sales: number; split: number; gciCents: number };

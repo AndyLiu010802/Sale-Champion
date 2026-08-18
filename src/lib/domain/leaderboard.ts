@@ -1,3 +1,4 @@
+import { round1 } from '../format';
 import type { LeaderboardEntry, Metric } from '../types';
 
 export type LeaderboardInputs = {
@@ -80,7 +81,7 @@ export function computeLeaderboard(inputs: LeaderboardInputs, metric: Metric, ra
     .filter((r) => r.value > 0);
 
   rows.sort((x, y) =>
-    cmp(y.value, x.value)                          // primary metric desc
+    cmp(round1(y.value), round1(x.value))          // primary metric desc (rounded: no float-dust ties)
     || cmp(y.gci, x.gci)                           // period GCI desc
     || cmp(x.earliest, y.earliest)                 // earliest sale createdAt asc
     || (x.agent.name < y.agent.name ? -1 : x.agent.name > y.agent.name ? 1 : 0), // name asc

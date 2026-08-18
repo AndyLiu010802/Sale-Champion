@@ -185,6 +185,23 @@ describe('computeLeaderboard', () => {
     expect(rows[1]).toMatchObject({ agentId: 'a', value: 0.7, rank: 2 });
   });
 
+  it('treats float-dust-equal splits as ties (ranks by GCI, not raw float sum)', () => {
+    const inputs: LeaderboardInputs = {
+      agents: [agent('a', 'Alice'), agent('b', 'Bob')],
+      sales: [
+        // 0.15 + 0.55 = 0.7000000000000001 in JS float math — raw-value sort would
+        // wrongly put Alice ahead of Bob despite Bob's much higher GCI.
+        sale('a', 50_000, '2026-08-05', '2026-08-05T10:00:00', 0.15),
+        sale('a', 50_000, '2026-08-06', '2026-08-06T10:00:00', 0.55),
+        sale('b', 300_000, '2026-08-05', '2026-08-05T10:00:00', 0.5),
+        sale('b', 200_000, '2026-08-06', '2026-08-06T10:00:00', 0.2),
+      ],
+      listings: [],
+    };
+    const rows = computeLeaderboard(inputs, 'sales_count', AUG);
+    expect(rows.map((r) => r.agentId)).toEqual(['b', 'a']);
+  });
+
   it('ignores sales from agents missing in the inputs but still counts them in totals', () => {
     const inputs: LeaderboardInputs = {
       agents: [agent('a', 'Alice')],

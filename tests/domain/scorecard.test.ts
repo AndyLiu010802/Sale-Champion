@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeScorecard, type ScorecardInputs } from '@/lib/domain/scorecard';
+import { computeLeaderboard, type LeaderboardInputs } from '@/lib/domain/leaderboard';
+import { formatCount } from '@/lib/format';
 
 // August 2026, end exclusive
 const AUG = { start: new Date(2026, 7, 1), end: new Date(2026, 8, 1) };
@@ -133,5 +135,40 @@ describe('computeScorecard', () => {
       sales: 0, split: 0, gciCents: 0, conversionPct: 0,
     }]);
     expect(totals.gciCents).toBe(0);
+  });
+
+  it('agrees with the leaderboard sales metric after display rounding', () => {
+    // Same agents/sales fed to both domain functions — computeScorecard.split and
+    // computeLeaderboard('sales_count').value must never diverge once rendered.
+    const agents = [
+      { id: 'a', name: 'Alice', role: 'agent' as const, active: true, photoUrl: null },
+      { id: 'b', name: 'Bob', role: 'agent' as const, active: true, photoUrl: null },
+    ];
+    const salesRows = [
+      {
+        agentId: 'a', gciCents: 100_000, saleDate: '2026-08-05',
+        createdAt: new Date('2026-08-05T10:00:00'), split: 0.15,
+      },
+      {
+        agentId: 'a', gciCents: 100_000, saleDate: '2026-08-06',
+        createdAt: new Date('2026-08-06T10:00:00'), split: 0.55,
+      },
+      {
+        agentId: 'b', gciCents: 200_000, saleDate: '2026-08-07',
+        createdAt: new Date('2026-08-07T10:00:00'), split: 1,
+      },
+    ];
+    const scorecardInputs: ScorecardInputs = { agents, sales: salesRows, listings: [], appraisals: [] };
+    const leaderboardInputs: LeaderboardInputs = { agents, sales: salesRows, listings: [] };
+
+    const { rows } = computeScorecard(scorecardInputs, AUG);
+    const entries = computeLeaderboard(leaderboardInputs, 'sales_count', AUG);
+    const entryById = new Map(entries.map((e) => [e.agentId, e]));
+
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      const entry = entryById.get(row.agentId)!;
+      expect(formatCount(row.split)).toBe(formatCount(entry.value));
+    }
   });
 });
