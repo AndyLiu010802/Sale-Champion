@@ -38,7 +38,7 @@ export async function GET(req: Request): Promise<Response> {
       id: a.id, name: a.name, photoUrl: a.photoUrl, active: a.active,
     })),
     sales: saleRows.map((s) => ({
-      agentId: s.agentId, gciCents: s.gciCents, saleDate: s.saleDate, createdAt: s.createdAt,
+      agentId: s.agentId, gciCents: s.gciCents, saleDate: s.saleDate, createdAt: s.createdAt, split: s.split,
     })),
     listings: listingRows.map((l) => ({ agentId: l.agentId, listedDate: l.listedDate })),
   };

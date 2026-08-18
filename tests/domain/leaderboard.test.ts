@@ -7,8 +7,10 @@ const AUG = { start: new Date(2026, 7, 1), end: new Date(2026, 8, 1) };
 
 const agent = (id: string, name: string, active = true, photoUrl: string | null = null) =>
   ({ id, name, photoUrl, active });
-const sale = (agentId: string, gciCents: number, saleDate: string, createdAt = `${saleDate}T10:00:00`) =>
-  ({ agentId, gciCents, saleDate, createdAt: new Date(createdAt) });
+const sale = (
+  agentId: string, gciCents: number, saleDate: string,
+  createdAt = `${saleDate}T10:00:00`, split = 1,
+) => ({ agentId, gciCents, saleDate, createdAt: new Date(createdAt), split });
 const listing = (agentId: string, listedDate: string) => ({ agentId, listedDate });
 
 describe('computeLeaderboard', () => {
@@ -168,6 +170,21 @@ describe('computeLeaderboard', () => {
     expect(rows[49]).toMatchObject({ agentId: 'a06', rank: 50 });
   });
 
+  it('sales_count sums split fractions (设计 §3:Σsplit,可为小数)', () => {
+    const inputs: LeaderboardInputs = {
+      agents: [agent('a', 'Alice'), agent('b', 'Bob')],
+      sales: [
+        sale('a', 100_000, '2026-08-05', '2026-08-05T10:00:00', 0.5),
+        sale('a', 100_000, '2026-08-06', '2026-08-06T10:00:00', 0.2),
+        sale('b', 100_000, '2026-08-07'),
+      ],
+      listings: [],
+    };
+    const rows = computeLeaderboard(inputs, 'sales_count', AUG);
+    expect(rows[0]).toMatchObject({ agentId: 'b', value: 1, rank: 1 });
+    expect(rows[1]).toMatchObject({ agentId: 'a', value: 0.7, rank: 2 });
+  });
+
   it('ignores sales from agents missing in the inputs but still counts them in totals', () => {
     const inputs: LeaderboardInputs = {
       agents: [agent('a', 'Alice')],
@@ -202,6 +219,21 @@ describe('computeMetricTotal', () => {
     expect(computeMetricTotal(inputs, 'gci', AUG)).toBe(300_000);
     expect(computeMetricTotal(inputs, 'listings', AUG)).toBe(1);
   });
+
+  it('sales_count total sums splits (not row count)', () => {
+    const inputs: LeaderboardInputs = {
+      agents: [agent('a', 'Alice')],
+      sales: [
+        sale('a', 100_000, '2026-08-05', '2026-08-05T10:00:00', 1),
+        sale('a', 100_000, '2026-08-06', '2026-08-06T10:00:00', 0.8),
+        sale('ghost', 100_000, '2026-08-07', '2026-08-07T10:00:00', 0.5),
+        sale('a', 100_000, '2026-07-01', '2026-07-01T10:00:00', 0.5), // out of period
+      ],
+      listings: [],
+    };
+    // 浮点求和用 toBeCloseTo(1 + 0.8 + 0.5 = 2.3)
+    expect(computeMetricTotal(inputs, 'sales_count', AUG)).toBeCloseTo(2.3, 12);
+  });
 });
 
 describe('format', () => {
@@ -215,9 +247,17 @@ describe('format', () => {
     expect(formatMoney(142_000_000)).toBe('$1.42M');
   });
 
-  it('formatValue: gci uses formatMoney, counts use String', () => {
+  it('formatValue: gci uses formatMoney, whole counts render bare', () => {
     expect(formatValue('gci', 850_000)).toBe('$8,500');
     expect(formatValue('sales_count', 7)).toBe('7');
     expect(formatValue('listings', 3)).toBe('3');
+  });
+
+  it('formatValue: fractional sales counts keep one decimal and trim .0 (设计 §3)', () => {
+    expect(formatValue('sales_count', 8)).toBe('8');
+    expect(formatValue('sales_count', 1.8)).toBe('1.8');
+    expect(formatValue('sales_count', 0.7)).toBe('0.7');
+    // Σsplit 的浮点尘埃要先四舍五入到 1 位小数再判整,不能直接 String()
+    expect(formatValue('sales_count', 7.999999999999999)).toBe('8');
   });
 });

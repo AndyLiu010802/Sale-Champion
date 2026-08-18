@@ -10,7 +10,7 @@ export type LeaderboardEntry = {
   agentId: string;
   name: string;
   photoUrl: string | null;
-  value: number;   // sales_count/listings: count; gci: cents
+  value: number;   // sales_count: Σsplit(可为小数);listings: count;gci: cents
   rank: number;    // 1-based, fully ordered (ties broken deterministically)
 };
 

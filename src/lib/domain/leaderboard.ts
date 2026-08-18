@@ -2,7 +2,8 @@ import type { LeaderboardEntry, Metric } from '../types';
 
 export type LeaderboardInputs = {
   agents: { id: string; name: string; photoUrl: string | null; active: boolean }[];
-  sales: { agentId: string; gciCents: number; saleDate: string; createdAt: Date }[];      // saleDate 'YYYY-MM-DD'
+  // saleDate 'YYYY-MM-DD';split:成交拆分份额(设计 §3:sales_count 口径 = Σsplit)
+  sales: { agentId: string; gciCents: number; saleDate: string; createdAt: Date; split: number }[];
   listings: { agentId: string; listedDate: string }[];
 };
 
@@ -43,7 +44,7 @@ function collectStats(inputs: LeaderboardInputs, range: Range): Map<string, Agen
   for (const row of inputs.sales) {
     if (!inRange(row.saleDate, range)) continue;
     const s = get(row.agentId);
-    s.salesCount += 1;
+    s.salesCount += row.split; // 设计 §3:sales_count = Σsplit(可为小数)
     s.gciCents += row.gciCents;
     s.earliestSaleCreatedAt = Math.min(s.earliestSaleCreatedAt, row.createdAt.getTime());
   }
@@ -100,6 +101,6 @@ export function computeMetricTotal(inputs: LeaderboardInputs, metric: Metric, ra
     return inputs.listings.filter((l) => inRange(l.listedDate, range)).length;
   }
   const inPeriod = inputs.sales.filter((s) => inRange(s.saleDate, range));
-  if (metric === 'sales_count') return inPeriod.length;
+  if (metric === 'sales_count') return inPeriod.reduce((sum, s) => sum + s.split, 0); // Σsplit(设计 §3)
   return inPeriod.reduce((sum, s) => sum + s.gciCents, 0);
 }
