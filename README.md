@@ -97,6 +97,24 @@ See `.env.example` for the authoritative list:
   oversized uploads early via the `Content-Length` header (`/api/uploads`,
   10MB cap), but treat that as a second line of defense — configure a limit
   such as `client_max_body_size` at the reverse proxy as the first one.
+- **Upgrading past the scorecard feature commit resets TV slide
+  customization once.** The settings row's slide list grew from 6/7 keys to
+  8 (`scorecard` and `scorecard_ytd` were added); an old stored row fails
+  validation on first read after the upgrade and falls back to the new
+  8-key defaults, silently dropping any custom slide order, enabled/disabled
+  toggles or per-slide durations. An admin needs to reconfigure slides once
+  after that upgrade.
+
+## Importing real data
+
+`docs/import/2026-08-south-scorecard.sql` is an idempotent bulk import of
+real SOUTH. scorecard data for July–August 2026 (agents, sales, listings and
+appraisals). Re-running it is safe and has no side effects — it checks for
+existing rows before inserting.
+
+- Local: `npx tsx scripts/run-sql.ts docs/import/2026-08-south-scorecard.sql`
+- Production: open the Railway PostgreSQL plugin's **Data** tab and paste
+  and run the whole file — it can be re-run without duplicating data.
 
 ## Architecture
 

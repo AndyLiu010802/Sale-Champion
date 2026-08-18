@@ -1,6 +1,9 @@
 -- SOUTH. SALES SCORECARD 真实数据导入:2026-08 明细 + 2026-07 补录(设计 §7/§7b)。
 -- 幂等:成员按 name 判重;sales/listings 按 'Imported <月> …' 地址标记判重;appraisals 按固定 id 判重。
 -- 前置:orgs 里已有组织(生产库已跑 seed;本地先 npm run db:seed)。
+-- 前置(重要):数据库中只能有一个 org,脚本全程用 (SELECT id FROM orgs LIMIT 1) 取组织,
+-- 有多个 org 时会全部导入到 LIMIT 1 取到的那一个,与预期不符。运行前先核验:
+--   SELECT count(*) FROM orgs; -- 应为 1,否则勿直接运行
 -- 云端:Railway Postgres → Data 标签整贴执行;本地:npx tsx scripts/run-sql.ts docs/import/2026-08-south-scorecard.sql
 -- 还原规则:成交 sale_price_cents=0(仅佣金参与统计;SQL 直写不经 API,不触发庆祝);
 -- 佣金按人头均摊到各行、余数进首行(7 月 Brudenell +4 分、Cowley +1 分);

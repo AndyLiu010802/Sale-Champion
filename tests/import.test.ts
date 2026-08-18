@@ -112,8 +112,16 @@ describe('july + august scorecard import SQL', () => {
   it('is idempotent — a second run changes nothing', async () => {
     await runSqlFile(db, SQL_FILE);
     const first = await rowCounts(db);
+    const firstSales = await db.select().from(sales);
+    const firstGciCents = firstSales.reduce((s, r) => s + r.gciCents, 0);
+    const firstSplitTotal = firstSales.reduce((s, r) => s + r.split, 0);
+
     await runSqlFile(db, SQL_FILE);
     expect(await rowCounts(db)).toEqual(first);
     expect(first).toEqual({ agents: 7, sales: 26, listings: 48, appraisals: 13 });
+
+    const secondSales = await db.select().from(sales);
+    expect(secondSales.reduce((s, r) => s + r.gciCents, 0)).toBe(firstGciCents);
+    expect(secondSales.reduce((s, r) => s + r.split, 0)).toBeCloseTo(firstSplitTotal, 12);
   });
 });
