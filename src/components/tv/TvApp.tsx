@@ -38,6 +38,14 @@ function sameSlides(a: CarouselSlide[], b: CarouselSlide[]): boolean {
     && s.page === b[i].page && s.pageCount === b[i].pageCount);
 }
 
+/** 把 slide 的 page 钳制到当前真实数据量能覆盖的范围内(质量审查修复:消除
+ *  数据刷新与展开队列 effect 之间的竞态——刷新后条目变少而 effect 还没来得及重算
+ *  队列时,渲染仍可能读到旧的 page,若不钳制会 slice 出空数组、闪一帧空白)。
+ *  角标显示仍用未钳制的 currentSlide.page/pageCount,下一拍 effect 会纠正。 */
+function effectivePage(page: number, total: number, perPage: number): number {
+  return Math.min(page, Math.max(0, Math.ceil(Math.max(total, 1) / perPage) - 1));
+}
+
 /** window.innerHeight,监听 resize;SSR 渲染期取 1080 兜底(客户端首次渲染即真实值)。 */
 function useWindowHeight(): number {
   const [height, setHeight] = useState(() =>
@@ -207,45 +215,70 @@ export default function TvApp() {
     }
     const page = currentSlide.page;
     switch (currentSlide.key) {
-      case 'leaderboard_sales_count':
+      case 'leaderboard_sales_count': {
+        const salesCount = tvState.leaderboards.sales_count;
         return (
           <LeaderboardSlide
             title="SALES CHAMPIONS"
             metric="sales_count"
-            entries={pageSlice(tvState.leaderboards.sales_count, page, perPage.leaderboard_sales_count)}
+            entries={pageSlice(
+              salesCount, effectivePage(page, salesCount.length, perPage.leaderboard_sales_count),
+              perPage.leaderboard_sales_count,
+            )}
             periodLabel={tvState.periodLabel}
           />
         );
-      case 'leaderboard_gci':
+      }
+      case 'leaderboard_gci': {
+        const gci = tvState.leaderboards.gci;
         return (
           <LeaderboardSlide
             title="TOP EARNERS"
             metric="gci"
-            entries={pageSlice(tvState.leaderboards.gci, page, perPage.leaderboard_gci)}
+            entries={pageSlice(
+              gci, effectivePage(page, gci.length, perPage.leaderboard_gci), perPage.leaderboard_gci,
+            )}
             periodLabel={tvState.periodLabel}
           />
         );
-      case 'leaderboard_listings':
+      }
+      case 'leaderboard_listings': {
+        const listingsBoard = tvState.leaderboards.listings;
         return (
           <LeaderboardSlide
             title="LISTING LEGENDS"
             metric="listings"
-            entries={pageSlice(tvState.leaderboards.listings, page, perPage.leaderboard_listings)}
+            entries={pageSlice(
+              listingsBoard, effectivePage(page, listingsBoard.length, perPage.leaderboard_listings),
+              perPage.leaderboard_listings,
+            )}
             periodLabel={tvState.periodLabel}
           />
         );
+      }
       case 'goal_progress':
         return <GoalSlide goals={tvState.goals} />;
-      case 'listings':
-        return <ListingsSlide listings={pageSlice(tvState.listings, page, perPage.listings)} />;
-      case 'announcements':
+      case 'listings': {
+        const listings = tvState.listings;
         return (
-          <AnnouncementSlide
-            announcements={pageSlice(
-              tvState.announcements.slice(0, ANNOUNCEMENTS_CAP), page, perPage.announcements,
+          <ListingsSlide
+            listings={pageSlice(
+              listings, effectivePage(page, listings.length, perPage.listings), perPage.listings,
             )}
           />
         );
+      }
+      case 'announcements': {
+        const announcements = tvState.announcements.slice(0, ANNOUNCEMENTS_CAP);
+        return (
+          <AnnouncementSlide
+            announcements={pageSlice(
+              announcements, effectivePage(page, announcements.length, perPage.announcements),
+              perPage.announcements,
+            )}
+          />
+        );
+      }
       default:
         return null;
     }
