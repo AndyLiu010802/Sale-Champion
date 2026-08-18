@@ -4,6 +4,7 @@ import { freshDb, seedBasics } from './helpers/db';
 import type { Db } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
 import { seed } from '@/lib/db/seed';
+import { DEFAULT_SETTINGS } from '@/lib/settings';
 import {
   orgs, users, agents, appraisals, sales, listings, announcements, goals, settings,
 } from '@/lib/db/schema';
@@ -128,9 +129,9 @@ describe('seed', () => {
 
     const settingsRows = await db.select().from(settings);
     expect(settingsRows).toHaveLength(1);
-    const data = settingsRows[0].data as { leaderboardPeriod: string; celebrationDurationSec: number };
-    expect(data.leaderboardPeriod).toBe('month');
-    expect(data.celebrationDurationSec).toBe(18);
+    // seed 内联的 DEFAULT_SETTINGS_DATA 必须与 '@/lib/settings' 的 DEFAULT_SETTINGS 逐字段同步
+    // (否则新库首读 safeParse 失败回落默认、seed 语义失真)——deep-equal 把同步约定钉死在测试里。
+    expect(settingsRows[0].data).toEqual(DEFAULT_SETTINGS);
   });
 
   it('demo mode inserts demo rows exactly once, all sales in the current month', async () => {

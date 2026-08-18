@@ -7,8 +7,10 @@ import {
 
 // Keep in sync with DEFAULT_SETTINGS in '@/lib/settings' (introduced in Task 9).
 // Inlined here because seed.ts is created before settings.ts exists.
+// 同步性由 tests/db.test.ts 的 toEqual(DEFAULT_SETTINGS) 断言钉死(scorecard Task 3)。
 const DEFAULT_SETTINGS_DATA = {
   slides: [
+    { key: 'scorecard', enabled: true, durationSec: 20 },
     { key: 'leaderboard_sales_count', enabled: true, durationSec: 15 },
     { key: 'leaderboard_gci', enabled: true, durationSec: 15 },
     { key: 'leaderboard_listings', enabled: true, durationSec: 15 },

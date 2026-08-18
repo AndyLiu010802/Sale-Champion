@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { freshDb, seedBasics } from './helpers/db';
 import { jsonRequest, authedRequest } from './helpers/request';
-import { getSettings, saveSettings, DEFAULT_SETTINGS, type SettingsData } from '@/lib/settings';
+import { getSettings, saveSettings, DEFAULT_SETTINGS, SLIDE_KEYS, type SettingsData } from '@/lib/settings';
 import { getHub } from '@/lib/ws/hub';
 import { GET as settingsGet, PUT as settingsPut } from '@/app/api/settings/route';
 import type { Db } from '@/lib/db';
@@ -14,6 +14,15 @@ beforeEach(async () => {
   db = await freshDb();
   const basics = await seedBasics(db);
   orgId = basics.orgId;
+});
+
+describe('SLIDE_KEYS / DEFAULT_SETTINGS', () => {
+  it('leads with the scorecard slide across all 7 keys (设计 §4)', () => {
+    expect(SLIDE_KEYS).toHaveLength(7);
+    expect(SLIDE_KEYS[0]).toBe('scorecard');
+    expect(DEFAULT_SETTINGS.slides.map((s) => s.key)).toEqual([...SLIDE_KEYS]);
+    expect(DEFAULT_SETTINGS.slides[0]).toEqual({ key: 'scorecard', enabled: true, durationSec: 20 });
+  });
 });
 
 describe('getSettings / saveSettings', () => {
@@ -62,12 +71,12 @@ describe('/api/settings', () => {
   });
 
   it('rejects slides with missing or duplicate keys', async () => {
-    // Missing one key (only 5 of the 6 required slide keys present).
+    // Missing keys (only 5 of the 7 required slide keys present).
     const missingKey = { ...DEFAULT_SETTINGS, slides: DEFAULT_SETTINGS.slides.slice(0, 5) };
     const res1 = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: missingKey }));
     expect(res1.status).toBe(400);
 
-    // Duplicate key (7 entries: all six keys present plus the first key repeated).
+    // Duplicate key (8 entries: all seven keys present plus the first key repeated).
     const duplicateKey = { ...DEFAULT_SETTINGS, slides: [DEFAULT_SETTINGS.slides[0], ...DEFAULT_SETTINGS.slides] };
     const res2 = await settingsPut(await authedRequest('/api/settings', { method: 'PUT', body: duplicateKey }));
     expect(res2.status).toBe(400);

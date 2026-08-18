@@ -1,3 +1,4 @@
+import type { ScorecardData } from './domain/scorecard';
 import type { SettingsData } from './settings';
 
 export const METRICS = ['sales_count', 'gci', 'listings'] as const;
@@ -39,5 +40,6 @@ export type TvStateResponse = {
   goals: GoalProgress[];                              // active only
   listings: TvListing[];                              // status='active', listedDate desc, limit 40
   announcements: TvAnnouncement[];                    // enabled only, sortOrder asc
+  scorecard: ScorecardData;                           // 设计 §5:全指标 0 不成行,gciCents desc
   periodLabel: string;                                // periodLabel(settings.leaderboardPeriod, now)
 };

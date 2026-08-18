@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshDb, seedBasics, type Basics } from '../helpers/db';
 import { jsonRequest, authedRequest } from '../helpers/request';
 import type { Db } from '@/lib/db';
-import { agents, announcements, goals, listings, sales, screens } from '@/lib/db/schema';
+import { agents, announcements, appraisals, goals, listings, sales, screens } from '@/lib/db/schema';
 import { generateDeviceToken, hashToken } from '@/lib/domain/pairing';
 import { periodLabel } from '@/lib/domain/periods';
 import { GET as tvStateGet } from '@/app/api/tv/state/route';
@@ -126,6 +126,37 @@ describe('GET /api/tv/state', () => {
     const { data } = await res.json();
     // 45 条 active 只回 40(安全封顶);listedDate 相同,不断言被截掉的是哪 5 条。
     expect(data.listings).toHaveLength(40);
+  });
+
+  it('assembles the scorecard block (totals, ranked rows, conversion)', async () => {
+    const today = localDateStr(new Date());
+    const bobId = crypto.randomUUID();
+    await db.insert(agents).values({ id: bobId, orgId: basics.orgId, name: 'Bob Ray' });
+
+    await db.insert(sales).values([
+      // Alice:共享成交两行(0.5+0.5)
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, address: '1 Split St', salePriceCents: 0, gciCents: 50000, saleDate: today, split: 0.5 },
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, address: '2 Split St', salePriceCents: 0, gciCents: 50000, saleDate: today, split: 0.5 },
+      // Bob:一行整单,GCI 更高 → rank 1
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: bobId, address: '3 Whole St', salePriceCents: 0, gciCents: 300000, saleDate: today },
+    ]);
+    await db.insert(listings).values([
+      // sold 也计入 listings 指标与 conversion(不上 TV 在售页)
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, address: '10 Beach Rd', listPriceCents: 0, listedDate: today, status: 'sold' },
+    ]);
+    await db.insert(appraisals).values([
+      { id: crypto.randomUUID(), orgId: basics.orgId, agentId: basics.agentId, date: today, count: 4 },
+    ]);
+
+    const res = await tvStateGet(stateRequest(token));
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+
+    expect(data.scorecard.rows).toEqual([
+      { agentId: bobId, name: 'Bob Ray', appraisals: 0, listings: 0, sales: 1, split: 1, gciCents: 300000, conversionPct: null },
+      { agentId: basics.agentId, name: 'Alice Ng', appraisals: 4, listings: 1, sales: 2, split: 1, gciCents: 100000, conversionPct: 25 },
+    ]);
+    expect(data.scorecard.totals).toEqual({ appraisals: 4, listings: 1, salesSplit: 2, gciCents: 400000 });
   });
 
   it('caps goal percent at 100', async () => {

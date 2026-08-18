@@ -22,7 +22,7 @@ export type BirthdayCelebration = {
 
 export type CelebrationPayload = SaleCelebration | BirthdayCelebration;
 
-export type DataDomain = 'sales' | 'listings' | 'goals' | 'announcements' | 'agents';
+export type DataDomain = 'sales' | 'listings' | 'goals' | 'announcements' | 'agents' | 'appraisals';
 
 export type ServerEvent =
   | { type: 'paired'; deviceToken: string; screen: TvScreenInfo }
