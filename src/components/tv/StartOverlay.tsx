@@ -2,8 +2,15 @@
 
 export function StartOverlay({ onStart }: { onStart: () => void }) {
   const handleClick = () => {
-    document.documentElement.requestFullscreen().catch(() => {});
+    // Unlock first — fullscreen is best-effort only. iOS Safari has no element
+    // Fullscreen API, so calling the missing method would throw synchronously
+    // and must never block the audio unlock.
     onStart();
+    try {
+      document.documentElement.requestFullscreen?.()?.catch(() => {});
+    } catch {
+      /* fullscreen unsupported — nothing to do */
+    }
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
