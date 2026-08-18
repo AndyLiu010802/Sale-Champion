@@ -6,7 +6,7 @@ import type { ServerEvent } from '@/lib/ws/protocol';
 import { GET, POST } from '@/app/api/appraisals/route';
 import { DELETE } from '@/app/api/appraisals/[id]/route';
 import { POST as AGENTS_POST } from '@/app/api/agents/route';
-import { DELETE as AGENTS_DELETE } from '@/app/api/agents/[id]/route';
+import { PATCH as AGENTS_PATCH } from '@/app/api/agents/[id]/route';
 
 let basics: Basics;
 let events: ServerEvent[];
@@ -99,11 +99,11 @@ describe('POST /api/appraisals', () => {
   });
 
   it('rejects inactive agents with 400 Unknown agent', async () => {
-    const delRes = await AGENTS_DELETE(
-      await authedRequest(`/api/agents/${basics.agentId}`, { method: 'DELETE' }),
+    const deactivateRes = await AGENTS_PATCH(
+      await authedRequest(`/api/agents/${basics.agentId}`, { method: 'PATCH', body: { active: false } }),
       { params: Promise.resolve({ id: basics.agentId }) },
     );
-    expect(delRes.status).toBe(200);
+    expect(deactivateRes.status).toBe(200);
     events.length = 0;
 
     const res = await POST(

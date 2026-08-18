@@ -8,7 +8,7 @@ import { GET, POST } from '@/app/api/sales/route';
 import { PATCH, DELETE } from '@/app/api/sales/[id]/route';
 import { POST as REPLAY } from '@/app/api/sales/[id]/replay/route';
 import { POST as AGENTS_POST } from '@/app/api/agents/route';
-import { DELETE as AGENTS_DELETE } from '@/app/api/agents/[id]/route';
+import { PATCH as AGENTS_PATCH } from '@/app/api/agents/[id]/route';
 import { buildCelebrationPayload, buildBirthdayPayload } from '@/lib/domain/celebration';
 
 let basics: Basics;
@@ -87,11 +87,11 @@ describe('POST /api/sales', () => {
   });
 
   it('rejects sales for inactive agents', async () => {
-    const delRes = await AGENTS_DELETE(
-      await authedRequest(`/api/agents/${basics.agentId}`, { method: 'DELETE' }),
+    const deactivateRes = await AGENTS_PATCH(
+      await authedRequest(`/api/agents/${basics.agentId}`, { method: 'PATCH', body: { active: false } }),
       { params: Promise.resolve({ id: basics.agentId }) },
     );
-    expect(delRes.status).toBe(200);
+    expect(deactivateRes.status).toBe(200);
     events.length = 0;
 
     const res = await POST(await authedRequest('/api/sales', { method: 'POST', body: saleBody() }));

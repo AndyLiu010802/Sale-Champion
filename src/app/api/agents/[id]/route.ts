@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
-import { agents } from '@/lib/db/schema';
+import { agents, appraisals, listings, sales } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/session';
 import { getHub } from '@/lib/ws/hub';
 import { BIRTHDAY_RE } from '@/lib/domain/birthday';
@@ -61,10 +61,16 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     .from(agents)
     .where(and(eq(agents.id, id), eq(agents.orgId, orgId)));
   if (!existing) return Response.json({ error: 'Not found' }, { status: 404 });
-  await db
-    .update(agents)
-    .set({ active: false })
-    .where(and(eq(agents.id, id), eq(agents.orgId, orgId)));
+  // 真删除(清理设计 §2.2):停用仍走 PATCH { active:false },此处是不可恢复的硬删除。
+  // schema 外键无 ON DELETE CASCADE,事务内按子表 → 主表顺序删,不留孤儿行、也不会
+  // 出现"业绩已删成员还在"的中间态(drizzle db.transaction 在 node-postgres 与 PGlite
+  // 两条驱动路径均可用,已核实)。TV 端一条 agents 广播足够——refetch 是全量 state。
+  await db.transaction(async (tx) => {
+    await tx.delete(sales).where(and(eq(sales.agentId, id), eq(sales.orgId, orgId)));
+    await tx.delete(listings).where(and(eq(listings.agentId, id), eq(listings.orgId, orgId)));
+    await tx.delete(appraisals).where(and(eq(appraisals.agentId, id), eq(appraisals.orgId, orgId)));
+    await tx.delete(agents).where(and(eq(agents.id, id), eq(agents.orgId, orgId)));
+  });
   getHub().broadcast({ type: 'data.updated', domain: 'agents' });
   return Response.json({ data: { id } });
 }
