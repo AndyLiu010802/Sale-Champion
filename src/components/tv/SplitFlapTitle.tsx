@@ -71,7 +71,7 @@ export default function SplitFlapTitle({ text }: { text: string }) {
           <span
             key={idx}
             aria-hidden="true"
-            className="relative flex h-[60px] w-[46px] shrink-0 items-center justify-center overflow-hidden rounded-md"
+            className="relative flex h-[60px] w-[62px] shrink-0 items-center justify-center overflow-hidden rounded-md"
             style={{
               background: 'linear-gradient(180deg, #22262e 0%, #121419 46%, #060708 54%, #0e1015 100%)',
               boxShadow:
@@ -81,7 +81,7 @@ export default function SplitFlapTitle({ text }: { text: string }) {
           >
             <span
               key={tiles[idx] ? tiles[idx].flips : 0}
-              className="font-display text-4xl font-bold tracking-tight text-white"
+              className="font-display text-5xl font-black tracking-tight text-white"
               style={{
                 animation: tiles[idx] && tiles[idx].flips > 0 ? `flap-flip ${FLIP_MS}ms ease-out` : undefined,
                 backfaceVisibility: 'hidden',
@@ -89,7 +89,14 @@ export default function SplitFlapTitle({ text }: { text: string }) {
             >
               {tiles[idx] ? tiles[idx].char : ch}
             </span>
-            <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-black/80" />
+            <span
+              aria-hidden="true"
+              className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2"
+              style={{
+                backgroundColor: 'rgba(0,0,0,0.9)',
+                boxShadow: '0 -1px 0 rgba(255,255,255,0.10)',
+              }}
+            />
           </span>
         ),
       )}
