@@ -365,7 +365,7 @@ export default function TvApp() {
       {/* 页码角标(设计 §2):多页才显示;右上角弱霓虹,避开右下 OfflineBadge。 */}
       {currentSlide && currentSlide.pageCount > 1 ? (
         <div
-          className="fixed right-8 top-8 z-40 font-heading text-3xl text-muted"
+          className="fixed right-8 top-8 z-40 rounded-lg bg-panel/60 px-4 py-1 font-heading text-3xl text-muted backdrop-blur-sm"
           style={{ textShadow: '0 0 12px rgba(0, 229, 255, 0.35)' }}
         >
           {currentSlide.page + 1}/{currentSlide.pageCount}
