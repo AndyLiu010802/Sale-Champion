@@ -20,7 +20,7 @@ function AnnouncementImage({ imageUrl, title }: { imageUrl: string; title: strin
 export default function AnnouncementSlide({ announcements }: { announcements: TvAnnouncement[] }) {
   return (
     <div className="flex h-full w-full flex-col px-24 py-12">
-      <h1 className="font-display text-6xl text-neon neon-text">TEAM NEWS</h1>
+      <h1 className="gold-title font-display text-6xl">TEAM NEWS</h1>
       {announcements.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-4xl text-muted">No data yet</p>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { LeaderboardEntry, Metric } from '@/lib/types';
 import { formatValue } from '@/lib/format';
+import GradientValue from '@/components/tv/GradientValue';
 
 /** rank 彩色左边:只染 border-left(.glass 会给四边 1px 白描边,四边色类会把它整圈染金)。 */
 function rowBorderClass(rank: number): string {
@@ -53,7 +54,7 @@ export default function LeaderboardSlide({
   return (
     <div className="flex h-full w-full flex-col px-24 py-12">
       <div className="flex items-baseline justify-between">
-        <h1 className="font-display text-6xl text-neon neon-text">{title}</h1>
+        <h1 className="gold-title font-display text-6xl">{title}</h1>
         <span className="font-heading text-3xl text-muted">{periodLabel}</span>
       </div>
       {entries.length === 0 ? (
@@ -76,8 +77,8 @@ export default function LeaderboardSlide({
               </span>
               <Avatar key={entry.photoUrl ?? 'none'} name={entry.name} photoUrl={entry.photoUrl} />
               <span className="flex-1 truncate font-heading text-4xl text-ink">{entry.name}</span>
-              <span className="font-display text-4xl text-money neon-text">
-                {formatValue(metric, entry.value)}
+              <span className="font-display text-4xl">
+                <GradientValue value={formatValue(metric, entry.value)} />
               </span>
             </motion.div>
           ))}

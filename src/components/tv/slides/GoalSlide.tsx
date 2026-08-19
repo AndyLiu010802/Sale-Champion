@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import type { GoalProgress } from '@/lib/types';
 import { formatValue } from '@/lib/format';
+import GradientValue from '@/components/tv/GradientValue';
 
 const METRIC_LABELS: Record<GoalProgress['metric'], string> = {
   sales_count: 'SALES',
@@ -18,7 +19,7 @@ const PERIOD_LABELS: Record<GoalProgress['period'], string> = {
 export default function GoalSlide({ goals }: { goals: GoalProgress[] }) {
   return (
     <div className="flex h-full w-full flex-col px-24 py-12">
-      <h1 className="font-display text-6xl text-neon neon-text">TEAM GOALS</h1>
+      <h1 className="gold-title font-display text-6xl">TEAM GOALS</h1>
       {goals.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-4xl text-muted">No data yet</p>
@@ -53,8 +54,8 @@ export default function GoalSlide({ goals }: { goals: GoalProgress[] }) {
                     transition={{ delay: 0.3 + i * 0.12, duration: 0.8, ease: 'easeOut' }}
                   />
                 </div>
-                <span className="w-40 text-right font-display text-5xl text-neon neon-text">
-                  {goal.percent}%
+                <span className="w-40 text-right font-display text-5xl">
+                  <GradientValue value={`${goal.percent}%`} />
                 </span>
               </div>
             </motion.div>

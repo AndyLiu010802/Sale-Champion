@@ -40,3 +40,57 @@ body { @apply bg-bg text-ink font-body; }
   backdrop-filter: url(#liquid-glass) blur(6px) saturate(1.5);
   -webkit-backdrop-filter: url(#liquid-glass) blur(6px) saturate(1.5);
 }
+
+/* —— 数值渐变 3D 字效(视觉设计 §3)——
+   前景:青→蓝→深紫水平渐变 clip 到字形;::before 用 attr(data-text) 画深色副本
+   下移 1px、再叠 1px text-shadow(共两层挤出);drop-shadow 微青光(弱于原霓虹
+   neon-text)。z-index:0 自建堆叠上下文,把 -1 的副本圈在组件内。真实 DOM 文本由
+   GradientValue 组件保证(E2E 数值断言不受影响)。 */
+.value-3d {
+  position: relative;
+  display: inline-block;
+  z-index: 0;
+  background: linear-gradient(90deg, #2ee6c9 0%, #3b7bc8 55%, #4a2b8c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 6px rgba(46, 230, 201, 0.35));
+}
+.value-3d::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  transform: translateY(1px);
+  color: #0e2233;
+  -webkit-text-fill-color: #0e2233; /* text-fill 可继承,必须显式压掉父级 transparent */
+  text-shadow: 0 1px 0 #081521;
+}
+
+/* —— 黄金荣耀标题(视觉设计 §4)——
+   双层背景 clip 到字形:上层 115° 高光带(shine sweep,background-size 250% 横向,
+   keyframes 前 35% 扫过、余 65% 停在画外 → 每 5s 一次),下层纵向金属金渐变;
+   drop-shadow 轻浮雕 + 柔和金晕。真实 DOM 文本,SLIDE_TITLE_RE 断言不受影响。 */
+.gold-title {
+  background-image:
+    linear-gradient(115deg, rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0.85) 50%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, #f9e7a0 0%, #f5c445 45%, #a8741a 100%);
+  background-size: 250% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 100% 0, 0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 2px rgba(62, 36, 2, 0.6)) drop-shadow(0 0 16px rgba(245, 196, 69, 0.3));
+  animation: gold-shine 5s ease-in-out infinite;
+}
+
+/* 100%→0%:超宽背景图从左向右掠过字面(background-position 百分比在图宽 > 容器时
+   反向映射),0%/100% 两端高光带都停在字面之外。 */
+@keyframes gold-shine {
+  0% { background-position: 100% 0, 0 0; }
+  35% { background-position: 0% 0, 0 0; }
+  100% { background-position: 0% 0, 0 0; }
+}
