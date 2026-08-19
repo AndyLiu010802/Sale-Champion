@@ -59,7 +59,9 @@ export default function ScorecardSlide({
             <TotalBlock label="TOTAL SALES" value={formatCount(data.totals.salesSplit)} />
             <TotalBlock label="TOTAL GROSS COMM" value={formatMoney(data.totals.gciCents)} />
           </div>
-          <div className="glass mt-8 flex-1 overflow-hidden rounded-2xl px-6">
+          {/* 不用 flex-1:玻璃容器贴合内容高度(表头 48px + 行数×56px),
+              行少时不留大块空玻璃;分页容量计算(SCORECARD_RESERVED_PX)不受影响。 */}
+          <div className="glass mt-8 overflow-hidden rounded-2xl px-6">
             {/* Tailwind preflight 已设 border-collapse:collapse,行高恰为 56px;
                 行间不加边框,避免像素累计漂移破坏分页容量计算。 */}
             <table className="w-full table-fixed text-left">
