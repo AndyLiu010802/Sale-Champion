@@ -31,7 +31,7 @@ export default function GoalSlide({ goals }: { goals: GoalProgress[] }) {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.12, duration: 0.4 }}
-              className="rounded-xl bg-panel/70 p-10 backdrop-blur-sm"
+              className="glass rounded-2xl p-10"
             >
               <div className="flex items-baseline justify-between">
                 <h2 className="font-heading text-4xl text-ink">

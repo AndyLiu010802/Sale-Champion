@@ -14,7 +14,7 @@ function conversionClass(conversionPct: number | null): string {
 
 function TotalBlock({ label, value, money }: { label: string; value: string; money?: boolean }) {
   return (
-    <div className="flex flex-col justify-center rounded-xl bg-panel/70 px-8 backdrop-blur-sm">
+    <div className="glass flex flex-col justify-center rounded-2xl px-8">
       <p className="text-2xl text-muted">{label}</p>
       <p className={`mt-1 font-display text-5xl ${money ? 'text-money neon-text' : 'text-ink'}`}>
         {value}
@@ -57,7 +57,7 @@ export default function ScorecardSlide({
             <TotalBlock label="TOTAL SALES" value={formatCount(data.totals.salesSplit)} />
             <TotalBlock label="TOTAL GROSS COMM" value={formatMoney(data.totals.gciCents)} money />
           </div>
-          <div className="mt-8 flex-1 overflow-hidden rounded-xl bg-panel/60 px-6 backdrop-blur-sm">
+          <div className="glass mt-8 flex-1 overflow-hidden rounded-2xl px-6">
             {/* Tailwind preflight 已设 border-collapse:collapse,行高恰为 56px;
                 行间不加边框,避免像素累计漂移破坏分页容量计算。 */}
             <table className="w-full table-fixed text-left">

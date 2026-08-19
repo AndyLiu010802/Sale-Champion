@@ -11,7 +11,7 @@ export function PairingScreen({ pairCode }: { pairCode: string | null }) {
           {pairCode.split('').map((ch, i) => (
             <div
               key={i}
-              className="neon-border flex h-40 w-32 items-center justify-center rounded-xl bg-panel/70 font-display text-8xl text-neon neon-text backdrop-blur-sm"
+              className="glass neon-border flex h-40 w-32 items-center justify-center rounded-2xl font-display text-8xl text-neon neon-text"
             >
               {ch}
             </div>
