@@ -6,7 +6,8 @@ import { useTvSocket } from '@/hooks/useTvSocket';
 import { carouselReducer, initCarousel, type CarouselSlide, type QueuedCelebration } from '@/lib/carousel';
 import { expandSlides, pageSize, pageSlice } from '@/lib/pagination';
 import type { SlideKey } from '@/lib/settings';
-import type { TvStateResponse } from '@/lib/types';
+import type { TvStateResponse, TvWeather } from '@/lib/types';
+import SkylineBackground from '@/components/tv/SkylineBackground';
 import PairingScreen from '@/components/tv/PairingScreen';
 import StartOverlay from '@/components/tv/StartOverlay';
 import OfflineBadge from '@/components/tv/OfflineBadge';
@@ -63,6 +64,8 @@ function useWindowHeight(): number {
 
 export default function TvApp() {
   const [tvState, setTvState] = useState<TvStateResponse | null>(null);
+  // 天气(天际线设计 §3):null = 从未成功(背景按"晴"+ 回落日出日落渲染)。
+  const [weather, setWeather] = useState<TvWeather | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [carousel, dispatch] = useReducer(carouselReducer, [], initCarousel);
   const windowHeight = useWindowHeight();
@@ -151,6 +154,29 @@ export default function TvApp() {
     const timer = setInterval(() => void refreshState(), 60 * 60 * 1000);
     return () => clearInterval(timer);
   }, [socket.phase, refreshState]);
+
+  // 天气轮询(天际线设计 §3):挂载即拉取,此后每 10 分钟一次;配对/轮播/离线三分支
+  // 共用,不依赖 socket.phase,与 refreshState/WS 互不干扰。失败沿用上次结果,
+  // 从未成功保持 null——天气链路任何故障都不影响数据展示。
+  useEffect(() => {
+    let cancelled = false;
+    const fetchWeather = async () => {
+      try {
+        const res = await fetch('/api/tv/weather');
+        if (!res.ok) return; // 503 等:沿用上次结果
+        const json = (await res.json()) as { data: TvWeather };
+        if (!cancelled) setWeather(json.data);
+      } catch {
+        // 网络失败:沿用上次结果(设计 §3)
+      }
+    };
+    void fetchWeather();
+    const timer = setInterval(() => void fetchWeather(), 10 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   // Keep rotating while offline too — cached data + OfflineBadge (spec §8);
   // only connecting/pairing (no data yet) and locked audio stop the carousel.
@@ -311,15 +337,22 @@ export default function TvApp() {
   }, [carousel.index, carousel.slides, tvState, perPage]);
 
   if (socket.phase === 'connecting' || socket.phase === 'pairing') {
-    return <PairingScreen pairCode={socket.pairCode} />;
+    return (
+      <div className="relative h-screen w-screen overflow-hidden bg-bg">
+        <SkylineBackground weather={weather} paused={false} />
+        <PairingScreen pairCode={socket.pairCode} />
+      </div>
+    );
   }
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-bg">
+      {/* 天际线背景(设计 §2):z-0 垫底;庆祝/生日全屏播放期间暂停渲染循环。 */}
+      <SkylineBackground weather={weather} paused={carousel.mode === 'celebrate'} />
       <AnimatePresence mode="wait">
         <motion.div
           key={currentSlide ? `${currentSlide.key}-${carousel.index}` : 'idle'}
-          className="h-full w-full"
+          className="relative z-10 h-full w-full"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

@@ -2,7 +2,7 @@
 
 export function PairingScreen({ pairCode }: { pairCode: string | null }) {
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center gap-12 bg-bg">
+    <div className="fixed inset-0 z-10 flex flex-col items-center justify-center gap-12">
       <h1 className="font-display text-5xl tracking-[0.3em] text-neon neon-text">
         PAIR THIS SCREEN
       </h1>
