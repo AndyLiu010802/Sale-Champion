@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { nightProgress, phaseFromClock, sunPosition } from '@/lib/scene/palette';
 import { effectsFromWeather } from '@/lib/scene/weather';
-import { scenePaint } from '@/lib/scene/hobart/paint';
+import { scenePaint, windowLitSchedule } from '@/lib/scene/hobart/paint';
 import {
   LAYER_SEEDS, MOUNTAIN, SKY_HORIZON_Y, mulberry32, rgba,
   type LayerFn, type ScenePaint,
@@ -26,6 +26,7 @@ const STAR_COUNT = 140;
 const CLOUD_COUNT = 5;          // 生成 5 朵,按云量显示 2–5 朵
 const CACHE_T_STEP = 0.015;     // 调色相位跨过该步进才重绘静态场景
 const FLICKER_EPOCH_MS = 4000;  // 窗灯低频闪烁纪元(也是缓存重绘频率上限:每 4s 一次)
+const WINDOW_LIT_STEP = 0.02;   // 窗灯作息量化档:跨过该步进才重绘静态场景(爬升/熄灭期跟手)
 
 // 静态层(后→前)与各自固定种子:一次画进离屏缓存(hobart 设计 §4)。
 // 顺序契约:水的静态色带/倒影画在 waterfront 之前 —— 码头岸线、栈桥、船桅要压在水上沿。
@@ -157,10 +158,16 @@ export default function SkylineBackground({
       const nightT = nightProgress(now, weatherNow?.sunrise, weatherNow?.sunset);
       const epoch = Math.floor(nowMs / FLICKER_EPOCH_MS);
       const sp = scenePaint(t, fx, epoch);
+      // 窗灯作息:纯本地时钟驱动,覆盖 scenePaint 关键帧里插值出的 windowLit(那份改为
+      // 未使用的回落值,不再进渲染路径)——山脚/码头/前景/塔楼窗点阵共用同一系数,
+      // 自动跟随作息(设计:晚 6–7 点渐次点亮、10–11 点渐次熄灭、白天零星 2–3 盏)。
+      sp.light.windowLit = windowLitSchedule(now);
       const windMul = fx.wind === 2 ? 3.5 : fx.wind === 1 ? 2 : 1;
 
-      // 静态场景缓存:resize / 调色跨步进 / 闪烁纪元 / 云量档 变化才重绘(沿用现机制)。
-      const key = `${W}x${H}|${Math.round(t / CACHE_T_STEP)}|${epoch}|${Math.round(fx.cloudiness * 10)}`;
+      // 静态场景缓存:resize / 调色跨步进 / 闪烁纪元 / 云量档 / 窗灯作息量化档 变化才
+      // 重绘(沿用现机制;窗灯档位保证爬升/熄灭渐变期缓存跟手重绘)。
+      const key = `${W}x${H}|${Math.round(t / CACHE_T_STEP)}|${epoch}|${Math.round(fx.cloudiness * 10)}`
+        + `|${Math.round(sp.light.windowLit / WINDOW_LIT_STEP)}`;
       if (key !== cacheKey) {
         drawCacheLayers(sp);
         cacheKey = key;

@@ -26,7 +26,11 @@ type HFrame = {
 const STOPS = [0, 0.28, 0.5, 0.68, 0.84, 1];
 
 // MIDDAY 的天空/山体/水面沿用原参考基准色(#3E7BD0/#BBD9EF、#8B7A8D/#6B5D75、#5C8CC4,
-// 测试逐字钉死);其余帧按时段氛围定稿写死(黄昏偏暖、夜晚深蓝)。
+// 测试逐字钉死;正是需求方"正午天空更通透的钴蓝→近地平线奶白"参考质感的目标色,不再调整)。
+// 其余帧按时段氛围定稿写死;色调质感打磨(2026-08-19 二轮):MORNING 云暖白化、
+// GOLDEN 天空/云饱和度上调(更浓烈暖金)、NIGHT 天空/云整体压深(更藏蓝);
+// 只动 sky/cloud 字段,far/mid/near 剪影色与水面/灯光组不动 —— 进深五档亮度序与既有
+// 单测(hobart.test.ts)逐字钉死的 MIDDAY 值均不受影响。
 // 每一帧内进深亮度严格递减:ridgeFar > ridgeNear > bridgeSil > midSil > wharfSil > fgSil
 // (已逐帧验算;线性插值保序,任意 t 都成立)。
 const FRAMES: HFrame[] = [
@@ -39,8 +43,8 @@ const FRAMES: HFrame[] = [
     hull: [18, 20, 36],
     bridgeLampAlpha: 0.55, boatLampAlpha: 0.5, waterGlowAlpha: 0.35,
   },
-  { // MORNING 清爽偏冷
-    skyTop: [92, 148, 210], skyHor: [178, 208, 232], cloud: [236, 238, 240], cloudShade: [204, 210, 220],
+  { // MORNING 清爽偏冷(云暖白化,呼应参考插画质感)
+    skyTop: [92, 148, 210], skyHor: [178, 208, 232], cloud: [244, 238, 226], cloudShade: [212, 204, 190],
     ridgeFar: [150, 140, 160], ridgeNear: [118, 108, 132], mist: [176, 196, 218], mistAlpha: 0.34,
     bridgeSil: [98, 108, 132], midSil: [76, 88, 112], wharfSil: [56, 68, 92], fgSil: [40, 50, 70],
     waterBase: [104, 146, 192], ripple: [222, 236, 244], rippleAlpha: 0.32,
@@ -57,8 +61,8 @@ const FRAMES: HFrame[] = [
     hull: [40, 48, 66],
     bridgeLampAlpha: 0, boatLampAlpha: 0, waterGlowAlpha: 0,
   },
-  { // GOLDEN 整城暖金
-    skyTop: [80, 110, 178], skyHor: [244, 176, 96], cloud: [250, 226, 188], cloudShade: [216, 178, 140],
+  { // GOLDEN 整城暖金(饱和度上调,天空/云更浓烈的暖金调)
+    skyTop: [80, 110, 178], skyHor: [248, 158, 72], cloud: [253, 208, 150], cloudShade: [222, 158, 104],
     ridgeFar: [148, 116, 124], ridgeNear: [116, 90, 102], mist: [230, 176, 120], mistAlpha: 0.3,
     bridgeSil: [104, 82, 96], midSil: [84, 66, 82], wharfSil: [62, 48, 66], fgSil: [42, 32, 50],
     waterBase: [150, 126, 140], ripple: [252, 216, 160], rippleAlpha: 0.4,
@@ -75,8 +79,8 @@ const FRAMES: HFrame[] = [
     hull: [18, 17, 36],
     bridgeLampAlpha: 0.5, boatLampAlpha: 0.45, waterGlowAlpha: 0.35,
   },
-  { // NIGHT 深蓝压暗、暖灯点亮
-    skyTop: [8, 12, 32], skyHor: [30, 38, 72], cloud: [40, 48, 74], cloudShade: [28, 34, 56],
+  { // NIGHT 更深邃的藏蓝压暗、暖灯点亮
+    skyTop: [5, 8, 26], skyHor: [20, 28, 58], cloud: [28, 34, 58], cloudShade: [18, 22, 40],
     ridgeFar: [26, 30, 52], ridgeNear: [19, 23, 42], mist: [36, 46, 78], mistAlpha: 0.24,
     bridgeSil: [18, 22, 40], midSil: [14, 18, 34], wharfSil: [11, 14, 27], fgSil: [7, 9, 20],
     waterBase: [20, 30, 56], ripple: [92, 110, 150], rippleAlpha: 0.2,
@@ -92,6 +96,12 @@ function clamp01(v: number): number {
 
 function lerp(a: number, b: number, u: number): number {
   return a + (b - a) * u;
+}
+
+/** 三次平滑过渡(Hermite ease):0..1 之间导数在两端为 0,无硬折线突变。 */
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const u = clamp01((x - edge0) / (edge1 - edge0));
+  return u * u * (3 - 2 * u);
 }
 
 function lerpRgb(a: Rgb, b: Rgb, u: number): Rgb {
@@ -167,4 +177,37 @@ export function scenePaint(t: number, fx: SceneEffects, flickerEpoch = 0): Scene
     },
     dim: base.dim,
   };
+}
+
+// —— 窗灯作息调度(独立于 phaseFromClock 的日出日落相位;只看现场时钟"几点钟")——
+//
+// 白天基线校准依据(2026-08-19 实测,mirrors 各画师 litRand < windowLit 的判定逻辑):
+//   city.ts drawWindowGrid  — 6 座 block 塔楼窗格网格(列距 0.008/行距 0.014,内边距
+//     0.003),逐塔楼实测网格数 84+48+65+33+48+44 = 322 格,命中概率直接用 windowLit;
+//   foreground.ts           — 屋顶窗点 4 个候选,命中概率 windowLit×0.5;
+//   waterfront.ts           — 4 座仓库×2 处灯位 = 8 个候选,命中概率 windowLit×0.6;
+//   mountain.ts             — 山脚发光点阵 30 个候选,命中概率 windowLit×0.4。
+// 折算成同权重下的"等效候选数"= 322×1 + 4×0.5 + 8×0.6 + 30×0.4 ≈ 340.8(≥ 原设计
+// 估算的"~150+",按实测数据为准)。要让白天期望点亮数落在 2–3 盏区间(取中值 2.5),
+// 基线 = 2.5 / 340.8 ≈ 0.0073,就近取 DAY_BASE = 0.0075(期望 ≈ 2.6 盏;伯努利方差下
+// 单帧实际点亮数多在 0–5 盏间波动,与"大约两三个"的目视描述相符)。
+const DAY_BASE = 0.0075;
+// 18:00→19:00 爬升 / 22:00→23:00 回落的目标峰值(需求方直接给定,不参与网格校准)。
+const NIGHT_PEAK = 0.92;
+
+/**
+ * 窗灯作息调度:纯本地时钟驱动(与 phaseFromClock 推的调色相位 t 无关,不随日出日落
+ * 漂移)。05:00–18:00 白天基线 DAY_BASE(见上方校准注释);18:00→19:00 用 smoothstep
+ * 平滑爬升到夜间峰值 NIGHT_PEAK——随机顺序渐次点亮由各画师既有的
+ * `litRand < sp.light.windowLit` 判定天然实现,不需要改画师;19:00–22:00 保持峰值;
+ * 22:00→23:00 平滑回落到 0(渐次熄灭);23:00–05:00 全暗。桥灯/船灯/水面灯影走各自的
+ * bridgeLampAlpha/boatLampAlpha/waterGlowAlpha,不受本调度影响。
+ */
+export function windowLitSchedule(now: Date): number {
+  const hr = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+  if (hr < 5 || hr >= 23) return 0;
+  if (hr < 18) return DAY_BASE;
+  if (hr < 19) return lerp(DAY_BASE, NIGHT_PEAK, smoothstep(18, 19, hr));
+  if (hr < 22) return NIGHT_PEAK;
+  return lerp(NIGHT_PEAK, 0, smoothstep(22, 23, hr)); // hr ∈ [22, 23)
 }
