@@ -107,4 +107,27 @@ describe('sunPosition / nightProgress', () => {
     expect(nightProgress(at(0, 0))).toBeCloseTo(260 / 605, 6);
     expect(nightProgress(at(5, 45))).toBeCloseTo(1, 6);
   });
+
+  // 回归测试:sunPosition 曾用 NIGHT_T=0.92 提前切月亮,而 nightProgress 的夜起点是
+  // 日落+40m(t=1)——中间那段窗口里 nightProgress 对"尚未到夜起点"的查询做 %MIN_PER_DAY
+  // 回绕,钳到≈1,月亮被钉死在弧线末端;真正到夜起点(t=1)那一帧 nightProgress 猛地变回 0,
+  // 月亮瞬间横跳。用真实调用方的模式(t=phaseFromClock, nightT=nightProgress,
+  // sunPosition(t, nightT))逐分钟扫过 SUNSET(0.84)→NIGHT(1)整段过渡窗口,断言只要连续两帧
+  // 都渲染月亮,位置就不能跳变。
+  it('the moon does not teleport across the sunset→night transition (t∈(0.84,1))', () => {
+    const sunrise = '2026-08-19T07:10';
+    const sunset = '2026-08-19T17:20'; // 夜起点 = 17:20+40 = 18:00
+    let prev: ReturnType<typeof sunPosition> | null = null;
+    for (let totalMin = 17 * 60 + 10; totalMin <= 18 * 60 + 30; totalMin++) {
+      const now = at(Math.floor(totalMin / 60), totalMin % 60);
+      const t = phaseFromClock(now, sunrise, sunset);
+      const nightT = nightProgress(now, sunrise, sunset);
+      const body = sunPosition(t, nightT);
+      if (prev && prev.kind === 'moon' && body.kind === 'moon') {
+        expect(Math.abs(body.x - prev.x)).toBeLessThan(0.05);
+        expect(Math.abs(body.y - prev.y)).toBeLessThan(0.05);
+      }
+      prev = body;
+    }
+  });
 });

@@ -213,8 +213,15 @@ export type CelestialBody = {
   y: number; // 高度 0(天顶附近)..1(地平线);>1 = 地平线下(不绘制)
 };
 
-/** t ≥ NIGHT_T 时按月亮弧线(由 nightT 推进),否则太阳弧线。 */
-export const NIGHT_T = 0.92;
+/**
+ * t ≥ NIGHT_T 时按月亮弧线(由 nightT 推进),否则太阳弧线。
+ * 必须等于 1(而非 0.84..1 之间的中间值):nightProgress 的定义域从日落+40m(=t=1)才开始——
+ * 在那之前查询,(m - nightStart + MIN_PER_DAY) % MIN_PER_DAY 会算出一个接近满周期的值,
+ * 钳到 1,让月亮在真正的夜起点之前就被钉在弧线末端;到 t=1 那一帧 nightProgress 才纠正回 0,
+ * 造成月亮位置瞬移(已用回归测试钉死)。NIGHT_T=1 让"渲染月亮"与 nightProgress 的定义域完全
+ * 重合,月亮永远从 nightT=0(弧线起点)开始画,不会用到回绕后的假值。
+ */
+export const NIGHT_T = 1;
 
 export function sunPosition(t: number, nightT = 0): CelestialBody {
   if (t >= NIGHT_T) {

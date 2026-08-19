@@ -8,6 +8,7 @@ type WeatherGlobal = typeof globalThis & {
 };
 
 export const WEATHER_TTL_MS = 10 * 60 * 1000;
+export const WEATHER_FETCH_TIMEOUT_MS = 5000;
 
 type OpenMeteo = {
   current: { weather_code: number; wind_speed_10m: number; is_day: number };
@@ -27,9 +28,19 @@ export async function getWeather(nowMs = Date.now()): Promise<WeatherResult | nu
   const lat = process.env.WEATHER_LAT ?? '-42.8794'; // Hobart(设计 §3)
   const lon = process.env.WEATHER_LON ?? '147.3294';
   try {
-    const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weather_code,wind_speed_10m,is_day&daily=sunrise,sunset&forecast_days=1&timezone=auto`,
-    );
+    // 上游挂起时不能无限等待(会拖住整条 TV 轮询链路):5s 超时走 AbortController——
+    // 用它而不是 AbortSignal.timeout 是为了让测试能用 vi.useFakeTimers 精确推进触发。
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), WEATHER_FETCH_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weather_code,wind_speed_10m,is_day&daily=sunrise,sunset&forecast_days=1&timezone=auto`,
+        { signal: controller.signal },
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
     const json = (await res.json()) as OpenMeteo;
     const payload: TvWeather = {
