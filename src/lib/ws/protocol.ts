@@ -10,6 +10,9 @@ export type SaleCelebration = {
   salePriceCents: number;
   anthemUrl: string | null;   // 已解析:agent.anthemUrl ?? settings.defaultAnthemUrl(可能为 builtin:xxx 或文件 URL)
   durationSec: number;
+  // 团队成交(团队设计 §4):该队的 active 成员,按 name 排序,TV 端并排显示照片。
+  // 个人成交与零成员团队一律省略此字段(TV 端回落单张头像)。
+  members?: { name: string; photoUrl: string | null }[];
 };
 
 export type BirthdayCelebration = {

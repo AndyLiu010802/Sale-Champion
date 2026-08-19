@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
+import { celebrationMembers } from '@/lib/db/eligibility';
 import { agents, sales } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/session';
 import { getHub } from '@/lib/ws/hub';
@@ -26,10 +27,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     .where(and(eq(agents.id, sale.agentId), eq(agents.orgId, orgId)));
   if (!agent) return Response.json({ error: 'Unknown agent' }, { status: 400 });
   const settings = await getSettings(db, orgId);
+  // 重播团队成交同样带成员名单(成员按重播时点的现况取)。
   const celebration = buildCelebrationPayload(
     { id: sale.id, address: sale.address, salePriceCents: sale.salePriceCents },
     { name: agent.name, photoUrl: agent.photoUrl, anthemUrl: agent.anthemUrl },
     settings,
+    await celebrationMembers(db, agent, orgId),
   );
   getHub().broadcast({ type: 'celebration.play', celebration });
   return Response.json({ data: { ok: true } });

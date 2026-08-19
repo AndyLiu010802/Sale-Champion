@@ -9,10 +9,14 @@ type AgentRow = {
   name: string;
   photoUrl: string | null;
   anthemUrl: string | null;
-  role: 'agent' | 'staff';
+  role: AgentType;
   birthday: string | null;
+  teamId: string | null;
   active: boolean;
 };
+
+// 团队设计 §5:Type 下拉三选一;team 行可挂若干 role='agent' 成员。
+type AgentType = 'agent' | 'staff' | 'team';
 
 const UPLOAD_OPTION = 'upload-custom';
 
@@ -52,7 +56,9 @@ export default function AgentsPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [broadcastingId, setBroadcastingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [role, setRole] = useState<'agent' | 'staff'>('agent');
+  const [role, setRole] = useState<AgentType>('agent');
+  // 编辑中的团队成员全量名单(勾选即改隶属),提交时整份发给服务端 diff。
+  const [memberIds, setMemberIds] = useState<string[]>([]);
   const [birthdayMonth, setBirthdayMonth] = useState('');
   const [birthdayDay, setBirthdayDay] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -82,6 +88,7 @@ export default function AgentsPage() {
     setPhotoUrl('');
     setAnthemUrl('');
     setRole('agent');
+    setMemberIds([]);
     setBirthdayMonth('');
     setBirthdayDay('');
     setError(null);
@@ -94,6 +101,7 @@ export default function AgentsPage() {
     setPhotoUrl(agent.photoUrl ?? '');
     setAnthemUrl(agent.anthemUrl ?? '');
     setRole(agent.role);
+    setMemberIds(agents.filter((a) => a.teamId === agent.id).map((a) => a.id));
     const [bm, bd] = agent.birthday ? agent.birthday.split('-') : ['', ''];
     setBirthdayMonth(bm ?? '');
     setBirthdayDay(bd ?? '');
@@ -165,16 +173,24 @@ export default function AgentsPage() {
         // being edited. Cleared photo/anthem/birthday fields are sent as explicit
         // `null` (the API supports clearing that way); untouched fields are omitted
         // so an unrelated field's empty-string state never trips server validation.
-        const patch: Record<string, string | null> = {};
+        const patch: Record<string, string | string[] | null> = {};
         if (name !== editingAgent.name) patch.name = name;
         if (photoUrl !== (editingAgent.photoUrl ?? '')) patch.photoUrl = photoUrl || null;
         // Staff have no anthem field in the UI — never send anthemUrl for a staff row,
         // so it's neither set nor cleared and the underlying data (if any) is preserved.
-        if (role === 'agent') {
+        if (role !== 'staff') {
           if (anthemUrl !== (editingAgent.anthemUrl ?? '')) patch.anthemUrl = anthemUrl || null;
         }
         if (role !== editingAgent.role) patch.role = role;
-        if (birthday !== editingAgent.birthday) patch.birthday = birthday;
+        // Team 行没有生日字段,连清空都不发——服务端会在转为 team 时自行置 null。
+        if (role !== 'team' && birthday !== editingAgent.birthday) patch.birthday = birthday;
+        if (role === 'team') {
+          const before = [...originalMemberIds(editingAgent.id)].sort().join(',');
+          if ([...memberIds].sort().join(',') !== before) patch.memberIds = memberIds;
+        } else if (editingAgent.role === 'team') {
+          // 从 Team 改走:成员保留、仅脱队(与删除同语义),否则服务端 400。
+          patch.memberIds = [];
+        }
         if (Object.keys(patch).length === 0) {
           setModalOpen(false);
           return;
@@ -192,8 +208,9 @@ export default function AgentsPage() {
             name,
             role,
             ...(photoUrl ? { photoUrl } : {}),
-            ...(role === 'agent' && anthemUrl ? { anthemUrl } : {}),
-            ...(birthday ? { birthday } : {}),
+            ...(role !== 'staff' && anthemUrl ? { anthemUrl } : {}),
+            ...(role !== 'team' && birthday ? { birthday } : {}),
+            ...(role === 'team' ? { memberIds } : {}),
           }),
         });
       }
@@ -287,6 +304,16 @@ export default function AgentsPage() {
   }
 
   const isCustomAnthem = anthemUrl !== '' && !isBuiltinAnthem(anthemUrl);
+  const teamNameById = new Map(agents.filter((a) => a.role === 'team').map((a) => [a.id, a.name]));
+  /** 当前挂在某队名下的成员 id(顺序与 memberIds 一致,便于 diff 比对)。 */
+  const originalMemberIds = (teamId: string) =>
+    agents.filter((a) => a.teamId === teamId).map((a) => a.id);
+  // 可勾选的成员:全部 active 的 agent 行(含已属其他队的——勾选即改隶属)。
+  const memberCandidates = agents.filter((a) => a.role === 'agent' && a.active);
+
+  function toggleMember(id: string) {
+    setMemberIds((cur) => (cur.includes(id) ? cur.filter((m) => m !== id) : [...cur, id]));
+  }
 
   return (
     <div>
@@ -307,11 +334,20 @@ export default function AgentsPage() {
                 </span>
               )}
             </td>
-            <td className="px-3 py-2">{a.name}</td>
+            <td className="px-3 py-2">
+              {a.name}
+              {a.teamId && (
+                <span className="ml-2 text-xs text-muted">· {teamNameById.get(a.teamId) ?? 'Team'}</span>
+              )}
+            </td>
             <td className="px-3 py-2">
               {a.role === 'staff' ? (
                 <span className="rounded bg-panel-2 px-2 py-0.5 text-xs font-medium text-muted">
                   Staff
+                </span>
+              ) : a.role === 'team' ? (
+                <span className="rounded bg-gold/10 px-2 py-0.5 text-xs font-medium text-gold">
+                  Team
                 </span>
               ) : (
                 <span className="rounded bg-neon/10 px-2 py-0.5 text-xs font-medium text-neon">
@@ -335,14 +371,16 @@ export default function AgentsPage() {
                 <Button variant="ghost" onClick={() => openEdit(a)}>
                   Edit
                 </Button>
-                <Button
-                  variant="ghost"
-                  aria-label="Play birthday broadcast"
-                  onClick={() => broadcastBirthday(a)}
-                  disabled={broadcastingId !== null}
-                >
-                  🎂
-                </Button>
+                {a.role !== 'team' && (
+                  <Button
+                    variant="ghost"
+                    aria-label="Play birthday broadcast"
+                    onClick={() => broadcastBirthday(a)}
+                    disabled={broadcastingId !== null}
+                  >
+                    🎂
+                  </Button>
+                )}
                 <Button
                   variant="danger"
                   onClick={() => deleteAgent(a)}
@@ -371,9 +409,10 @@ export default function AgentsPage() {
             <TextInput value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
           </Field>
           <Field label="Type">
-            <Select value={role} onChange={(e) => setRole(e.target.value as 'agent' | 'staff')}>
+            <Select value={role} onChange={(e) => setRole(e.target.value as AgentType)}>
               <option value="agent">Agent</option>
               <option value="staff">Staff</option>
+              <option value="team">Team</option>
             </Select>
           </Field>
           <Field label="Photo">
@@ -395,35 +434,63 @@ export default function AgentsPage() {
               {uploadingPhoto && <span className="text-sm text-muted">Uploading…</span>}
             </div>
           </Field>
-          <Field label="Birthday">
-            <div className="flex gap-2">
-              <Select
-                aria-label="Birthday month"
-                value={birthdayMonth}
-                onChange={(e) => setBirthdayMonth(e.target.value)}
-              >
-                <option value="">—</option>
-                {MONTHS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </Select>
-              <Select
-                aria-label="Birthday day"
-                value={birthdayDay}
-                onChange={(e) => setBirthdayDay(e.target.value)}
-              >
-                <option value="">—</option>
-                {DAYS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </Field>
-          {role === 'agent' && (
+          {role !== 'team' && (
+            <Field label="Birthday">
+              <div className="flex gap-2">
+                <Select
+                  aria-label="Birthday month"
+                  value={birthdayMonth}
+                  onChange={(e) => setBirthdayMonth(e.target.value)}
+                >
+                  <option value="">—</option>
+                  {MONTHS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  aria-label="Birthday day"
+                  value={birthdayDay}
+                  onChange={(e) => setBirthdayDay(e.target.value)}
+                >
+                  <option value="">—</option>
+                  {DAYS.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </Field>
+          )}
+          {role === 'team' && (
+            <Field label="Members">
+              <div className="max-h-52 space-y-1 overflow-y-auto rounded border border-panel-2 bg-bg p-2">
+                {memberCandidates.length === 0 && (
+                  <p className="text-sm text-muted">No active agents to add yet.</p>
+                )}
+                {memberCandidates.map((a) => {
+                  // 已属别队的成员也列出:勾选即改隶属,旁注写明它现在在哪队。
+                  const otherTeam =
+                    a.teamId && a.teamId !== editingAgent?.id ? teamNameById.get(a.teamId) : null;
+                  return (
+                    <label key={a.id} className="flex items-center gap-2 text-sm text-ink">
+                      <input
+                        type="checkbox"
+                        checked={memberIds.includes(a.id)}
+                        onChange={() => toggleMember(a.id)}
+                        className="h-4 w-4 accent-neon"
+                      />
+                      <span>{a.name}</span>
+                      {otherTeam && <span className="text-xs text-muted">· {otherTeam}</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            </Field>
+          )}
+          {role !== 'staff' && (
             <>
               <Field label="Anthem">
                 <Select value={anthemUrl} onChange={(e) => onAnthemSelect(e.target.value)}>

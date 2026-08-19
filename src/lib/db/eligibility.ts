@@ -1,7 +1,7 @@
 // 团队资格口径的服务端单一出处(团队设计 §2/§3)。
 // 客户端同口径的纯谓词在 src/lib/domain/eligibility.ts,两边必须一起改。
 
-import { and, eq, inArray, isNull, or, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or, type SQL } from 'drizzle-orm';
 import type { Db } from '.';
 import { agents } from './schema';
 
@@ -44,4 +44,25 @@ export async function findInvalidMembers(
     ));
   const valid = new Set(rows.map((r) => r.id));
   return memberIds.filter((id) => id === selfId || !valid.has(id));
+}
+
+/**
+ * 团队成交庆祝要并排展示的成员(团队设计 §4):该队 active 成员,按 name 排序。
+ * 传入的不是 team 行时返回空数组 → 调用方省略 payload 的 members 字段。
+ */
+export async function celebrationMembers(
+  db: Db,
+  agent: { id: string; role: string },
+  orgId: string,
+): Promise<{ name: string; photoUrl: string | null }[]> {
+  if (agent.role !== 'team') return [];
+  return db
+    .select({ name: agents.name, photoUrl: agents.photoUrl })
+    .from(agents)
+    .where(and(
+      eq(agents.teamId, agent.id),
+      eq(agents.orgId, orgId),
+      eq(agents.active, true),
+    ))
+    .orderBy(asc(agents.name));
 }

@@ -301,6 +301,35 @@ describe('buildCelebrationPayload', () => {
     expect(celebration.kind).toBe('sale');
     expect(celebration.anthemUrl).toBe(DEFAULT_SETTINGS.defaultAnthemUrl);
   });
+
+  it('passes team members through as a members array', () => {
+    const celebration = buildCelebrationPayload(
+      { id: 'sale-1', address: '1 Main St', salePriceCents: 100 },
+      { name: 'Hill & Co', photoUrl: null, anthemUrl: null },
+      DEFAULT_SETTINGS,
+      [{ name: 'Marnie Hill', photoUrl: null }, { name: 'Martin Waldhoff', photoUrl: '/f/m.jpg' }],
+    );
+    expect(celebration.members).toEqual([
+      { name: 'Marnie Hill', photoUrl: null },
+      { name: 'Martin Waldhoff', photoUrl: '/f/m.jpg' },
+    ]);
+  });
+
+  it('omits the members field when the list is empty or absent', () => {
+    const empty = buildCelebrationPayload(
+      { id: 'sale-1', address: '1 Main St', salePriceCents: 100 },
+      { name: 'Hill & Co', photoUrl: null, anthemUrl: null },
+      DEFAULT_SETTINGS,
+      [],
+    );
+    expect(empty).not.toHaveProperty('members');
+    const absent = buildCelebrationPayload(
+      { id: 'sale-2', address: '2 Main St', salePriceCents: 100 },
+      { name: 'Alice Ng', photoUrl: null, anthemUrl: null },
+      DEFAULT_SETTINGS,
+    );
+    expect(absent).not.toHaveProperty('members');
+  });
 });
 
 describe('buildBirthdayPayload', () => {
@@ -437,5 +466,111 @@ describe('team recording eligibility', () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'Unknown agent' });
     expect(events).toEqual([]);
+  });
+});
+
+// 团队成交庆祝(团队设计 §4):payload 带 members,TV 端并排显示全体成员照片。
+describe('team sale celebrations', () => {
+  async function makeAgent(name: string, photoUrl?: string): Promise<string> {
+    const res = await AGENTS_POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: photoUrl ? { name, photoUrl } : { name },
+      }),
+    );
+    const { data } = await res.json();
+    return data.id as string;
+  }
+
+  async function makeTeam(name: string, memberIds: string[]): Promise<string> {
+    const res = await AGENTS_POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name, role: 'team', memberIds },
+      }),
+    );
+    const { data } = await res.json();
+    events.length = 0;
+    return data.id as string;
+  }
+
+  function saleCelebration(): Extract<ServerEvent, { type: 'celebration.play' }>['celebration'] {
+    const first = events[0];
+    if (first.type !== 'celebration.play') throw new Error('expected celebration.play first');
+    return first.celebration;
+  }
+
+  it('carries active members sorted by name', async () => {
+    const martin = await makeAgent('Martin Waldhoff', '/files/martin.jpg');
+    const marnie = await makeAgent('Marnie Hill');
+    const teamId = await makeTeam('Hill & Co', [martin, marnie]);
+
+    const res = await POST(
+      await authedRequest('/api/sales', { method: 'POST', body: { ...saleBody(), agentId: teamId } }),
+    );
+    expect(res.status).toBe(200);
+    const c = saleCelebration();
+    if (c.kind !== 'sale') throw new Error('expected a sale celebration');
+    expect(c.agentName).toBe('Hill & Co');
+    expect(c.members).toEqual([
+      { name: 'Marnie Hill', photoUrl: null },
+      { name: 'Martin Waldhoff', photoUrl: '/files/martin.jpg' },
+    ]);
+  });
+
+  it('leaves deactivated members out of the member strip', async () => {
+    const marnie = await makeAgent('Marnie Hill');
+    const martin = await makeAgent('Martin Waldhoff');
+    const teamId = await makeTeam('Hill & Co', [marnie, martin]);
+    await AGENTS_PATCH(
+      await authedRequest('/api/agents/' + martin, { method: 'PATCH', body: { active: false } }),
+      { params: Promise.resolve({ id: martin }) },
+    );
+    events.length = 0;
+
+    const res = await POST(
+      await authedRequest('/api/sales', { method: 'POST', body: { ...saleBody(), agentId: teamId } }),
+    );
+    expect(res.status).toBe(200);
+    const c = saleCelebration();
+    if (c.kind !== 'sale') throw new Error('expected a sale celebration');
+    expect(c.members).toEqual([{ name: 'Marnie Hill', photoUrl: null }]);
+  });
+
+  it('omits members entirely for an individual sale and for an empty team', async () => {
+    const solo = await POST(await authedRequest('/api/sales', { method: 'POST', body: saleBody() }));
+    expect(solo.status).toBe(200);
+    const individual = saleCelebration();
+    expect(individual).not.toHaveProperty('members');
+
+    const emptyTeam = await makeTeam('Team Cowley', []);
+    const res = await POST(
+      await authedRequest('/api/sales', {
+        method: 'POST',
+        body: { ...saleBody(), agentId: emptyTeam },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(saleCelebration()).not.toHaveProperty('members');
+  });
+
+  it('replay of a team sale carries the members too', async () => {
+    const marnie = await makeAgent('Marnie Hill');
+    const teamId = await makeTeam('Hill & Co', [marnie]);
+    const created = await POST(
+      await authedRequest('/api/sales', { method: 'POST', body: { ...saleBody(), agentId: teamId } }),
+    );
+    const { data: sale } = await created.json();
+    events.length = 0;
+
+    const res = await REPLAY(
+      await authedRequest('/api/sales/' + sale.id + '/replay', { method: 'POST' }),
+      { params: Promise.resolve({ id: sale.id }) },
+    );
+    expect(res.status).toBe(200);
+    const c = saleCelebration();
+    if (c.kind !== 'sale') throw new Error('expected a sale celebration');
+    expect(c.agentName).toBe('Hill & Co');
+    expect(c.members).toEqual([{ name: 'Marnie Hill', photoUrl: null }]);
   });
 });

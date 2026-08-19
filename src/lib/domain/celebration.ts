@@ -5,6 +5,7 @@ export function buildCelebrationPayload(
   sale: { id: string; address: string; salePriceCents: number },
   agent: { name: string; photoUrl: string | null; anthemUrl: string | null },
   settings: SettingsData,
+  members: { name: string; photoUrl: string | null }[] = [],
 ): SaleCelebration {
   return {
     kind: 'sale',
@@ -15,6 +16,8 @@ export function buildCelebrationPayload(
     salePriceCents: sale.salePriceCents,
     anthemUrl: agent.anthemUrl || settings.defaultAnthemUrl,
     durationSec: settings.celebrationDurationSec,
+    // 空名单省略字段(团队设计 §4):个人成交与零成员团队走同一条单头像分支。
+    ...(members.length > 0 ? { members } : {}),
   };
 }
 
