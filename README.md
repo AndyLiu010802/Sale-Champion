@@ -6,6 +6,15 @@ goal progress and announcements — and the moment a sale is recorded in the adm
 console, every TV interrupts its carousel to play a full-screen celebration
 with the agent's personal anthem.
 
+Every TV page (carousel, pairing screen and the offline state) renders on an
+animated city-skyline background: the palette follows the real local time of
+day (dawn → morning → midday → golden hour → sunset → night, anchored on the
+day's actual sunrise/sunset) and layers live weather effects — rain, wind-blown
+clouds, lightning, snow, fog and clear night stars — from Open-Meteo, defaulting
+to Hobart (`WEATHER_LAT` / `WEATHER_LON` to change the location). A failing
+weather link never affects the data display: the TV falls back to a clear sky
+with fixed 06:30/19:00 sunrise/sunset.
+
 Built as a single Next.js (App Router) application served by a custom Node
 server that hosts a WebSocket hub on the same port. PostgreSQL via Drizzle ORM
 (embedded PGlite in development), Tailwind CSS, Framer Motion, Vitest and
@@ -56,6 +65,7 @@ See `.env.example` for the authoritative list:
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | First admin account, created by `npm run db:seed` |
 | `STORAGE_DRIVER` | `local` (disk, dev) or `s3` (Cloudflare R2, production) |
 | `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PUBLIC_BASE_URL` | Cloudflare R2 credentials, required when `STORAGE_DRIVER=s3` |
+| `WEATHER_LAT` / `WEATHER_LON` | Coordinates for the TV background's live weather (default Hobart `-42.8794` / `147.3294`) |
 
 ## Deploying to Railway
 

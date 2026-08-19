@@ -39,3 +39,13 @@ export type TvStateResponse = {
   periodLabel: string;                                // periodLabel(settings.leaderboardPeriod, now)
   fyLabel: string;                                    // fyLabel(now),如 'FY 2026–27'
 };
+
+/** GET /api/tv/weather 的响应形状(天际线背景设计 §3)。
+ *  sunrise/sunset 为 Open-Meteo `timezone=auto` 返回的 ISO 本地时间字符串。 */
+export type TvWeather = {
+  weatherCode: number;   // WMO 天气码
+  windSpeedKmh: number;  // 10m 风速,km/h
+  isDay: boolean;
+  sunrise: string;       // 如 '2026-08-19T07:10'
+  sunset: string;
+};
