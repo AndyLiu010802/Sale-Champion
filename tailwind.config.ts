@@ -15,7 +15,7 @@ export default {
         silver: '#b8c2d8',
         bronze: '#cd7f32',
         ink: '#dfe6f2',
-        muted: '#8fa3c8',
+        muted: '#a6b8da',
       },
       fontFamily: {
         display: ['var(--font-orbitron)', 'sans-serif'],
