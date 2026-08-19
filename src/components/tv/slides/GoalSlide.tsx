@@ -35,7 +35,7 @@ export default function GoalSlide({ goals }: { goals: GoalProgress[] }) {
               className="glass rounded-2xl p-10"
             >
               <div className="flex items-baseline justify-between">
-                <h2 className="font-heading text-4xl text-ink">
+                <h2 className="font-heading text-4xl font-bold text-ink">
                   {METRIC_LABELS[goal.metric]}{' '}
                   <span className="text-2xl text-muted">{PERIOD_LABELS[goal.period]}</span>
                 </h2>

@@ -41,31 +41,22 @@ body { @apply bg-bg text-ink font-body; }
   -webkit-backdrop-filter: url(#liquid-glass) blur(6px) saturate(1.5);
 }
 
-/* —— 数值渐变 3D 字效(视觉设计 §3)——
-   前景:青→蓝→深紫水平渐变 clip 到字形;::before 用 attr(data-text) 画深色副本
-   下移 1px、再叠 1px text-shadow(共两层挤出);drop-shadow 微青光(弱于原霓虹
-   neon-text)。z-index:0 自建堆叠上下文,把 -1 的副本圈在组件内。真实 DOM 文本由
-   GradientValue 组件保证(E2E 数值断言不受影响)。 */
+/* —— 数值渐变 3D 字效(视觉设计 §3,审查后修订)——
+   前景:青→亮蓝→亮紫水平渐变 clip 到字形,font-weight:900 加粗。立体感与发光完全
+   由 filter: drop-shadow(...) 链实现(与 .gold-title 同模式):第一层深色小幅偏移
+   营造浮雕厚度,第二层亮青光晕。**不再叠加任何与字形重合的深色副本**(原 ::before
+   挤出层 + text-shadow 已删除)——Chromium 对多层 background-clip:text/color:
+   transparent 重叠合成有暗浊渲染 bug,drop-shadow 是后合成特效,不触发该问题。
+   真实 DOM 文本由 GradientValue 组件保证(E2E 数值断言不受影响)。 */
 .value-3d {
-  position: relative;
   display: inline-block;
-  z-index: 0;
-  background: linear-gradient(90deg, #2ee6c9 0%, #3b7bc8 55%, #4a2b8c 100%);
+  font-weight: 900;
+  background: linear-gradient(90deg, #5cf7de 0%, #6fa8ff 55%, #b06cff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 6px rgba(46, 230, 201, 0.35));
-}
-.value-3d::before {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  transform: translateY(1px);
-  color: #0e2233;
-  -webkit-text-fill-color: #0e2233; /* text-fill 可继承,必须显式压掉父级 transparent */
-  text-shadow: 0 1px 0 #081521;
+  filter: drop-shadow(0 2px 1px rgba(8, 21, 33, 0.55)) drop-shadow(0 0 10px rgba(92, 247, 222, 0.5));
 }
 
 /* —— 黄金荣耀标题(视觉设计 §4)——
@@ -73,6 +64,7 @@ body { @apply bg-bg text-ink font-body; }
    keyframes 前 35% 扫过、余 65% 停在画外 → 每 5s 一次),下层纵向金属金渐变;
    drop-shadow 轻浮雕 + 柔和金晕。真实 DOM 文本,SLIDE_TITLE_RE 断言不受影响。 */
 .gold-title {
+  font-weight: 900;
   background-image:
     linear-gradient(115deg, rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0.85) 50%, rgba(255, 255, 255, 0) 58%),
     linear-gradient(180deg, #f9e7a0 0%, #f5c445 45%, #a8741a 100%);
