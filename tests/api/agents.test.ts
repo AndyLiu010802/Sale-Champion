@@ -484,3 +484,237 @@ describe('POST /api/agents/[id]/birthday-broadcast', () => {
     expect(events).toEqual([]);
   });
 });
+
+// ── 真团队模型(设计 §2/§5)──────────────────────────────────────────────────
+// membership 只经 memberIds 全量名单进出:服务端事务内 diff(勾选者挂队、原属该队
+// 但未勾选者释放),team_id 不可直接写。四条应用层约束各有一条逐字 400 文案。
+describe('teams', () => {
+  /** 建一个 role='agent' 行,返回其 id。 */
+  async function makeAgent(name: string): Promise<string> {
+    const res = await POST(
+      await authedRequest('/api/agents', { method: 'POST', body: { name } }),
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    events.length = 0;
+    return data.id as string;
+  }
+
+  /** 建一个 role='team' 行(可带成员),返回其 id。 */
+  async function makeTeam(name: string, memberIds: string[] = []): Promise<string> {
+    const res = await POST(
+      await authedRequest('/api/agents', { method: 'POST', body: { name, role: 'team', memberIds } }),
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    events.length = 0;
+    return data.id as string;
+  }
+
+  async function readAgent(id: string) {
+    const [row] = await db.select().from(agents).where(eq(agents.id, id));
+    return row;
+  }
+
+  it('creates a team row with members attached in one transaction', async () => {
+    const marnie = await makeAgent('Marnie Hill');
+    const martin = await makeAgent('Martin Waldhoff');
+
+    const res = await POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Hill & Co', role: 'team', memberIds: [marnie, martin] },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.role).toBe('team');
+    expect(data.teamId).toBeNull();
+    expect(data.birthday).toBeNull();
+    expect(events).toEqual([{ type: 'data.updated', domain: 'agents' }]);
+
+    expect((await readAgent(marnie)).teamId).toBe(data.id);
+    expect((await readAgent(martin)).teamId).toBe(data.id);
+  });
+
+  it('rejects memberIds on a non-team row with 400', async () => {
+    const marnie = await makeAgent('Marnie Hill');
+    const res = await POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Not A Team', memberIds: [marnie] },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'memberIds is only allowed for team rows' });
+    expect(events).toEqual([]);
+    expect((await readAgent(marnie)).teamId).toBeNull();
+  });
+
+  it('rejects a birthday on a team row with 400', async () => {
+    const res = await POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Team Cowley', role: 'team', birthday: '08-18' },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Team rows cannot have a birthday' });
+    expect(events).toEqual([]);
+  });
+
+  it('rejects staff, team and foreign-org rows as members with 400 Invalid member', async () => {
+    const staffRes = await POST(
+      await authedRequest('/api/agents', { method: 'POST', body: { name: 'Sam Staff', role: 'staff' } }),
+    );
+    const { data: staff } = await staffRes.json();
+    const otherTeam = await makeTeam('Team Brudenell');
+
+    const otherOrgId = crypto.randomUUID();
+    await db.insert(orgs).values({ id: otherOrgId, name: 'Other Agency' });
+    const foreignId = crypto.randomUUID();
+    await db.insert(agents).values({ id: foreignId, orgId: otherOrgId, name: 'Foreign Fay' });
+    events.length = 0;
+
+    for (const bad of [staff.id as string, otherTeam, foreignId, 'ghost']) {
+      const res = await POST(
+        await authedRequest('/api/agents', {
+          method: 'POST',
+          body: { name: 'Team ' + bad, role: 'team', memberIds: [bad] },
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'Invalid member' });
+      expect(events).toEqual([]);
+    }
+  });
+
+  it('PATCH memberIds attaches newly checked members and releases unchecked ones', async () => {
+    const nick = await makeAgent('Nick Cowley');
+    const haylee = await makeAgent('Haylee Abbott');
+    const teamId = await makeTeam('Team Cowley', [nick, haylee]);
+
+    const res = await PATCH(
+      await authedRequest('/api/agents/' + teamId, { method: 'PATCH', body: { memberIds: [haylee] } }),
+      { params: Promise.resolve({ id: teamId }) },
+    );
+    expect(res.status).toBe(200);
+    expect(events).toEqual([{ type: 'data.updated', domain: 'agents' }]);
+
+    expect((await readAgent(nick)).teamId).toBeNull();
+    expect((await readAgent(haylee)).teamId).toBe(teamId);
+    // 释放的成员本身仍在(只脱队,不删行)
+    expect((await readAgent(nick)).name).toBe('Nick Cowley');
+  });
+
+  it('PATCH memberIds moves a member from another team', async () => {
+    const alex = await makeAgent('Alex Muller');
+    const teamA = await makeTeam('Hill & Co', [alex]);
+    const teamB = await makeTeam('Team Brudenell');
+
+    const res = await PATCH(
+      await authedRequest('/api/agents/' + teamB, { method: 'PATCH', body: { memberIds: [alex] } }),
+      { params: Promise.resolve({ id: teamB }) },
+    );
+    expect(res.status).toBe(200);
+    expect((await readAgent(alex)).teamId).toBe(teamB);
+    expect((await readAgent(teamA)).teamId).toBeNull();
+  });
+
+  it('PATCH rejects moving a team out of the team role while it still has members', async () => {
+    const eloise = await makeAgent('Eloise');
+    const teamId = await makeTeam('Team Brudenell', [eloise]);
+
+    const blocked = await PATCH(
+      await authedRequest('/api/agents/' + teamId, { method: 'PATCH', body: { role: 'agent' } }),
+      { params: Promise.resolve({ id: teamId }) },
+    );
+    expect(blocked.status).toBe(400);
+    expect(await blocked.json()).toEqual({ error: 'Team still has members' });
+    expect(events).toEqual([]);
+    expect((await readAgent(eloise)).teamId).toBe(teamId);
+
+    // 同请求先清空成员即放行
+    const allowed = await PATCH(
+      await authedRequest('/api/agents/' + teamId, {
+        method: 'PATCH',
+        body: { role: 'agent', memberIds: [] },
+      }),
+      { params: Promise.resolve({ id: teamId }) },
+    );
+    expect(allowed.status).toBe(200);
+    expect((await allowed.json()).data.role).toBe('agent');
+    expect((await readAgent(eloise)).teamId).toBeNull();
+  });
+
+  it('PATCH a member to staff releases it from its team in the same update', async () => {
+    const mark = await makeAgent('Mark Brudenell');
+    const teamId = await makeTeam('Team Brudenell', [mark]);
+
+    const res = await PATCH(
+      await authedRequest('/api/agents/' + mark, { method: 'PATCH', body: { role: 'staff' } }),
+      { params: Promise.resolve({ id: mark }) },
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.role).toBe('staff');
+    expect(data.teamId).toBeNull();
+    expect((await readAgent(teamId)).role).toBe('team');
+  });
+
+  it('PATCH role to team clears the birthday', async () => {
+    const res = await POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Was An Agent', birthday: '03-09' },
+      }),
+    );
+    const { data: created } = await res.json();
+    expect(created.birthday).toBe('03-09');
+    events.length = 0;
+
+    const patched = await PATCH(
+      await authedRequest('/api/agents/' + created.id, { method: 'PATCH', body: { role: 'team' } }),
+      { params: Promise.resolve({ id: created.id }) },
+    );
+    expect(patched.status).toBe(200);
+    const { data } = await patched.json();
+    expect(data.role).toBe('team');
+    expect(data.birthday).toBeNull();
+  });
+
+  it('PATCH rejects a birthday on a team row with 400', async () => {
+    const teamId = await makeTeam('Hill & Co');
+    const res = await PATCH(
+      await authedRequest('/api/agents/' + teamId, { method: 'PATCH', body: { birthday: '12-25' } }),
+      { params: Promise.resolve({ id: teamId }) },
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Team rows cannot have a birthday' });
+    expect(events).toEqual([]);
+  });
+
+  it('DELETE a team releases its members and cascades only its own performance rows', async () => {
+    const marnie = await makeAgent('Marnie Hill');
+    const teamId = await makeTeam('Hill & Co', [marnie]);
+    await seedPerformanceRows(teamId, basics.orgId);
+    await seedPerformanceRows(marnie, basics.orgId);
+
+    const res = await DELETE(
+      await authedRequest('/api/agents/' + teamId, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: teamId }) },
+    );
+    expect(res.status).toBe(200);
+    expect(events).toEqual([{ type: 'data.updated', domain: 'agents' }]);
+
+    expect(await readAgent(teamId)).toBeUndefined();
+    const member = await readAgent(marnie);
+    expect(member).toBeDefined();
+    expect(member.teamId).toBeNull();
+
+    expect(await db.select().from(sales).where(eq(sales.agentId, teamId))).toHaveLength(0);
+    expect(await db.select().from(sales).where(eq(sales.agentId, marnie))).toHaveLength(2);
+    expect(await db.select().from(listings).where(eq(listings.agentId, marnie))).toHaveLength(1);
+    expect(await db.select().from(appraisals).where(eq(appraisals.agentId, marnie))).toHaveLength(3);
+  });
+});

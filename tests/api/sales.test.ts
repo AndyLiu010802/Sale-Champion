@@ -385,3 +385,57 @@ describe('role guard: staff cannot transact', () => {
     expect(events).toEqual([]);
   });
 });
+
+// 团队录入资格门(团队设计 §3):active 且(role='team' 或(role='agent' 且未归队))。
+describe('team recording eligibility', () => {
+  async function makeTeamWithMember(): Promise<{ teamId: string; memberId: string }> {
+    const memberRes = await AGENTS_POST(
+      await authedRequest('/api/agents', { method: 'POST', body: { name: 'Marnie Hill' } }),
+    );
+    const { data: member } = await memberRes.json();
+    const teamRes = await AGENTS_POST(
+      await authedRequest('/api/agents', {
+        method: 'POST',
+        body: { name: 'Hill & Co', role: 'team', memberIds: [member.id] },
+      }),
+    );
+    const { data: team } = await teamRes.json();
+    events.length = 0;
+    return { teamId: team.id as string, memberId: member.id as string };
+  }
+
+  it('records a sale against a team row', async () => {
+    const { teamId } = await makeTeamWithMember();
+    const res = await POST(
+      await authedRequest('/api/sales', { method: 'POST', body: { ...saleBody(), agentId: teamId } }),
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.agentId).toBe(teamId);
+  });
+
+  it('rejects a sale for a member who belongs to a team with 400 Unknown agent', async () => {
+    const { memberId } = await makeTeamWithMember();
+    const res = await POST(
+      await authedRequest('/api/sales', { method: 'POST', body: { ...saleBody(), agentId: memberId } }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Unknown agent' });
+    expect(events).toEqual([]);
+  });
+
+  it('rejects PATCHing a sale onto a teamed member with 400 Unknown agent', async () => {
+    const { memberId } = await makeTeamWithMember();
+    const created = await POST(await authedRequest('/api/sales', { method: 'POST', body: saleBody() }));
+    const { data: sale } = await created.json();
+    events.length = 0;
+
+    const res = await PATCH(
+      await authedRequest('/api/sales/' + sale.id, { method: 'PATCH', body: { agentId: memberId } }),
+      { params: Promise.resolve({ id: sale.id }) },
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Unknown agent' });
+    expect(events).toEqual([]);
+  });
+});

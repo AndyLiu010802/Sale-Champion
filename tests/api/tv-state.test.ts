@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { freshDb, seedBasics, type Basics } from '../helpers/db';
 import { jsonRequest, authedRequest } from '../helpers/request';
 import type { Db } from '@/lib/db';
@@ -232,5 +233,68 @@ describe('GET /api/tv/state', () => {
       ).toBe(false);
     }
     expect(data.goals[0].currentValue).toBe(300000);
+  });
+
+  // 团队成行资格(团队设计 §3):active 且 role ∈ {agent, team} 且 team_id IS NULL。
+  it('ranks the team row and never its members', async () => {
+    const today = localDateStr(new Date());
+    const memberId = crypto.randomUUID();
+    await db.insert(agents).values({ id: memberId, orgId: basics.orgId, name: 'Marnie Hill' });
+    const teamId = crypto.randomUUID();
+    await db.insert(agents).values({
+      id: teamId, orgId: basics.orgId, name: 'Hill & Co', role: 'team',
+    });
+    await db.update(agents).set({ teamId }).where(eq(agents.id, memberId));
+    await db.insert(sales).values([
+      {
+        id: crypto.randomUUID(), orgId: basics.orgId, agentId: teamId, address: '4 Bay Rd',
+        salePriceCents: 60000000, gciCents: 400000, saleDate: today,
+      },
+      // 成员归队前自己录过的成交:非零指标,所以下面的排除断言不是被"全 0 不成行"顺带过滤的
+      {
+        id: crypto.randomUUID(), orgId: basics.orgId, agentId: memberId, address: '5 Bay Rd',
+        salePriceCents: 30000000, gciCents: 150000, saleDate: today,
+      },
+    ]);
+
+    const res = await tvStateGet(stateRequest(token));
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.leaderboards.gci[0]).toMatchObject({ agentId: teamId, name: 'Hill & Co', value: 400000 });
+    for (const metric of ['sales_count', 'gci', 'listings'] as const) {
+      expect(
+        data.leaderboards[metric].some((e: { agentId: string }) => e.agentId === memberId),
+      ).toBe(false);
+    }
+    // 记分卡同口径:队上榜、成员不上榜。
+    expect(data.scorecard.rows.some((r: { agentId: string }) => r.agentId === teamId)).toBe(true);
+    expect(data.scorecard.rows.some((r: { agentId: string }) => r.agentId === memberId)).toBe(false);
+  });
+
+  it('keeps a teamed member historical rows in the goal total', async () => {
+    const today = localDateStr(new Date());
+    const memberId = crypto.randomUUID();
+    await db.insert(agents).values({ id: memberId, orgId: basics.orgId, name: 'Martin Waldhoff' });
+    // 归队前录下的业绩(团队设计 §3:历史数据零迁移,goal 总量不受成行过滤影响)
+    await db.insert(sales).values({
+      id: crypto.randomUUID(), orgId: basics.orgId, agentId: memberId, address: '8 Hill St',
+      salePriceCents: 50000000, gciCents: 250000, saleDate: today,
+    });
+    const teamId = crypto.randomUUID();
+    await db.insert(agents).values({
+      id: teamId, orgId: basics.orgId, name: 'Hill & Co', role: 'team',
+    });
+    await db.update(agents).set({ teamId }).where(eq(agents.id, memberId));
+    await db.insert(goals).values({
+      id: crypto.randomUUID(), orgId: basics.orgId, metric: 'gci', targetValue: 1000000, period: 'month', active: true,
+    });
+
+    const res = await tvStateGet(stateRequest(token));
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(
+      data.leaderboards.gci.some((e: { agentId: string }) => e.agentId === memberId),
+    ).toBe(false);
+    expect(data.goals[0].currentValue).toBe(250000);
   });
 });

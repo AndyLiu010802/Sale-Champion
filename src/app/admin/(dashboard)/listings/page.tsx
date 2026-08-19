@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Button, Field, Modal, Select, Table, TextInput } from '@/components/admin/ui';
+import { isEligiblePerformer } from '@/lib/domain/eligibility';
 import { formatMoney } from '@/lib/format';
 
-type AgentRow = { id: string; name: string; active: boolean; role: 'agent' | 'staff' };
+type AgentRow = { id: string; name: string; active: boolean; role: 'agent' | 'staff' | 'team'; teamId: string | null };
 
 type ListingRow = {
   id: string;
@@ -70,7 +71,7 @@ export default function ListingsPage() {
   // assigned to a now-deactivated (or since-demoted-to-staff) agent can still show that
   // agent's name and be edited without reassigning it. The create/edit picker filters
   // down to active agents only (staff never appear — they can't hold listings).
-  const activeAgents = agents.filter((a) => a.active && a.role === 'agent');
+  const activeAgents = agents.filter(isEligiblePerformer);
   // If the listing being edited belongs to an agent who is no longer selectable
   // (deactivated or demoted to staff since the listing was created), that agent won't be
   // in `activeAgents` — add it back as an extra option so the required <select> still has
