@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Button, Field, Modal, Select, Table, TextInput } from '@/components/admin/ui';
+import { isEligiblePerformer } from '@/lib/domain/eligibility';
 import { formatMoney } from '@/lib/format';
 
-type AgentRow = { id: string; name: string; active: boolean; role: 'agent' | 'staff' };
+type AgentRow = { id: string; name: string; active: boolean; role: 'agent' | 'staff' | 'team'; teamId: string | null };
 
 type SaleRow = {
   id: string;
@@ -53,7 +54,7 @@ export default function DashboardPage() {
   // sale for a now-deactivated (or since-demoted-to-staff) agent can still show that
   // agent's name and be edited without reassigning it. Views that let the admin *pick*
   // an agent filter down to active agents (staff never appear — they can't record sales).
-  const activeAgents = agents.filter((a) => a.active && a.role === 'agent');
+  const activeAgents = agents.filter(isEligiblePerformer);
   // If the sale being edited belongs to an agent who is no longer selectable (deactivated
   // or demoted to staff since the sale was recorded), that agent won't be in
   // `activeAgents` — add it back as an extra option so the required <select> still has a

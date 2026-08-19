@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { agents, announcements, appraisals, goals, listings, sales, screens } from '@/lib/db/schema';
 import { hashToken } from '@/lib/domain/pairing';
@@ -26,11 +26,15 @@ export async function GET(req: Request): Promise<Response> {
   const now = new Date();
   const settings = await getSettings(db, orgId);
 
-  // Staff never enter the leaderboards. Sales/listings rows can only reference
-  // role='agent' members (enforced by their APIs), so computeMetricTotal's
-  // team-wide goal totals need no extra role filtering here.
+  // 成行资格(团队设计 §3):staff 从不上榜;归队成员由队代表,也不单独成行。
+  // computeMetricTotal 的 goal 总量走 sales/listings 全表,不受这里的过滤影响——
+  // 归队成员归队前录下的历史业绩照常计入总量。
   const agentRows = await db.select().from(agents)
-    .where(and(eq(agents.orgId, orgId), eq(agents.role, 'agent')));
+    .where(and(
+      eq(agents.orgId, orgId),
+      inArray(agents.role, ['agent', 'team']),
+      isNull(agents.teamId),
+    ));
   const saleRows = await db.select().from(sales).where(eq(sales.orgId, orgId));
   const listingRows = await db.select().from(listings).where(eq(listings.orgId, orgId));
   const appraisalRows = await db.select().from(appraisals).where(eq(appraisals.orgId, orgId));

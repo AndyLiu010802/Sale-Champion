@@ -1,5 +1,6 @@
 import {
   pgTable, text, integer, bigint, boolean, timestamp, date, jsonb, uniqueIndex, doublePrecision,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 export const orgs = pgTable('orgs', {
@@ -25,8 +26,11 @@ export const agents = pgTable('agents', {
   name: text('name').notNull(),
   photoUrl: text('photo_url'),
   anthemUrl: text('anthem_url'),
-  role: text('role').notNull().default('agent'), // 'agent' | 'staff'
-  birthday: text('birthday'),                    // 'MM-DD' 或 null
+  role: text('role').notNull().default('agent'), // 'agent' | 'staff' | 'team'(团队设计 §2)
+  birthday: text('birthday'),                    // 'MM-DD' 或 null(team 行恒 null)
+  // 队籍(团队设计 §2):可空自引用,只能指向同 org 的 role='team' 行;team 行自身恒 null
+  // (不嵌套)。四条约束全在应用层校验(见 src/lib/db/eligibility.ts),DB 只保 FK 完整性。
+  teamId: text('team_id').references((): AnyPgColumn => agents.id),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

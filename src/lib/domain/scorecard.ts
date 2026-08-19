@@ -72,7 +72,8 @@ export function computeScorecard(inputs: ScorecardInputs, range: Range): Scoreca
   }
 
   const rows: ScorecardRow[] = inputs.agents
-    .filter((a) => a.role === 'agent' && a.active)
+    // 团队设计 §3:team 行与未归队 agent 同样成行(归队成员的过滤在 tv/state 组装处)。
+    .filter((a) => (a.role === 'agent' || a.role === 'team') && a.active)
     .map((a) => {
       const s = acc.get(a.id) ?? newAcc();
       return {

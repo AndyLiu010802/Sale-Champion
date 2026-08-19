@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
+import { eligiblePerformerWhere } from '@/lib/db/eligibility';
 import { agents, sales } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/session';
 import { getHub } from '@/lib/ws/hub';
@@ -44,14 +45,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const [agent] = await db
       .select()
       .from(agents)
-      .where(
-        and(
-          eq(agents.id, parsed.data.agentId),
-          eq(agents.orgId, orgId),
-          eq(agents.active, true),
-          eq(agents.role, 'agent'),
-        ),
-      );
+      .where(eligiblePerformerWhere(parsed.data.agentId, orgId));
     if (!agent) return Response.json({ error: 'Unknown agent' }, { status: 400 });
   }
   const [sale] = await db

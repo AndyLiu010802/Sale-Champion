@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { and, desc, eq } from 'drizzle-orm';
 import { getDb } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
+import { celebrationMembers, eligiblePerformerWhere } from '@/lib/db/eligibility';
 import { agents, sales } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/session';
 import { getHub } from '@/lib/ws/hub';
@@ -66,14 +67,7 @@ export async function POST(req: Request) {
   const [agent] = await db
     .select()
     .from(agents)
-    .where(
-      and(
-        eq(agents.id, parsed.data.agentId),
-        eq(agents.orgId, orgId),
-        eq(agents.active, true),
-        eq(agents.role, 'agent'),
-      ),
-    );
+    .where(eligiblePerformerWhere(parsed.data.agentId, orgId));
   if (!agent) return Response.json({ error: 'Unknown agent' }, { status: 400 });
 
   const [sale] = await db
@@ -95,6 +89,7 @@ export async function POST(req: Request) {
     { id: sale.id, address: sale.address, salePriceCents: sale.salePriceCents },
     { name: agent.name, photoUrl: agent.photoUrl, anthemUrl: agent.anthemUrl },
     settings,
+    await celebrationMembers(db, agent, orgId),
   );
   const hub = getHub();
   hub.broadcast({ type: 'celebration.play', celebration });

@@ -10,14 +10,29 @@ import { BIRTHDAY_ANTHEM_ID } from '@/lib/audio/anthems';
 
 type Particle = { left: number; size: number; duration: number; delay: number; color: string };
 
-function Avatar({ name, photoUrl }: { name: string; photoUrl: string | null }) {
+// 'lg' 是单人成交/生日的原尺寸;'sm' 是团队成交并排展示时的缩小版(团队设计 §4)。
+const AVATAR_SIZES = {
+  lg: { box: 'h-48 w-48', initial: 'text-7xl' },
+  sm: { box: 'h-36 w-36', initial: 'text-5xl' },
+} as const;
+
+function Avatar({
+  name,
+  photoUrl,
+  size = 'lg',
+}: {
+  name: string;
+  photoUrl: string | null;
+  size?: keyof typeof AVATAR_SIZES;
+}) {
   const [failed, setFailed] = useState(false);
+  const { box, initial } = AVATAR_SIZES[size];
   if (photoUrl && !failed) {
     return (
       <img
         src={photoUrl}
         alt={name}
-        className="h-48 w-48 rounded-full border-4 border-neon object-cover"
+        className={`${box} rounded-full border-4 border-neon object-cover`}
         style={{ boxShadow: '0 0 32px rgba(0, 229, 255, 0.8)' }}
         onError={() => setFailed(true)}
       />
@@ -25,7 +40,7 @@ function Avatar({ name, photoUrl }: { name: string; photoUrl: string | null }) {
   }
   return (
     <span
-      className="flex h-48 w-48 items-center justify-center rounded-full border-4 border-neon bg-panel-2 font-display text-7xl text-neon"
+      className={`flex ${box} items-center justify-center rounded-full border-4 border-neon bg-panel-2 font-display ${initial} text-neon`}
       style={{ boxShadow: '0 0 32px rgba(0, 229, 255, 0.8)' }}
     >
       {(Array.from(name)[0] ?? '?').toUpperCase()}
@@ -121,8 +136,15 @@ export default function CelebrationOverlay({
       ) : (
         <>
           <p className="font-display text-8xl text-gold neon-text">🎉 SOLD! 🎉</p>
-          <div className="mt-12">
-            <Avatar key={payload.agentPhotoUrl ?? 'none'} name={payload.agentName} photoUrl={payload.agentPhotoUrl} />
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-6">
+            {payload.members?.length ? (
+              // 团队成交(团队设计 §4):全体 active 成员照片并排,标题仍是队名。
+              payload.members.map((m) => (
+                <Avatar key={m.name} name={m.name} photoUrl={m.photoUrl} size="sm" />
+              ))
+            ) : (
+              <Avatar key={payload.agentPhotoUrl ?? 'none'} name={payload.agentName} photoUrl={payload.agentPhotoUrl} />
+            )}
           </div>
           <p className="mt-8 font-display text-7xl text-neon neon-text">{payload.agentName}</p>
           <p className="mt-6 font-heading text-4xl text-ink">{payload.address}</p>

@@ -131,6 +131,32 @@ existing rows before inserting.
 - Production: open the Railway PostgreSQL plugin's **Data** tab and paste
   and run the whole file — it can be re-run without duplicating data.
 
+### Teams
+
+A member's **Type** is `Agent`, `Staff` or `Team`. A Team row stands in for a
+group of agents: pick Team in the member dialog and tick its members in the
+**Members** list (ticking moves an agent out of whatever team it was in). A
+Team has no birthday, and its members keep their own photo, birthday broadcast
+and anthem.
+
+Performance is recorded against the team, never against its members: the
+agent dropdowns on Sales, Listings and Appraisals list Team rows and agents
+who belong to no team, and the API rejects anything else with
+`400 Unknown agent`. Leaderboards and the scorecard follow the same rule, so a
+team appears once and its members never appear separately. Rows a member
+recorded *before* joining a team still count toward org goal totals. When a
+team sells, the celebration shows the team name with all of its active
+members' photos side by side. Deleting a team releases its members (they
+survive, unattached) and removes only the team's own sales, listings and
+appraisals.
+
+`docs/import/2026-08-teams.sql` migrates the standing data: it converts the
+three existing group rows (Hill & Co, Team Cowley, Team Brudenell) into Team
+rows in place and creates their seven members, attached and without photos —
+upload those from the Team page afterwards. It is idempotent and expects
+`2026-08-south-scorecard.sql` to have been run first; run it the same two ways
+as the import above.
+
 ## Architecture
 
 One Next.js application served by a custom Node server (`server.ts` →

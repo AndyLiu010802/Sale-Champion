@@ -184,4 +184,21 @@ describe('computeScorecard', () => {
       expect(formatCount(row.split)).toBe(formatCount(entry.value));
     }
   });
+
+  // 团队设计 §3:team 行成行,staff 仍排除,归队成员的过滤在 tv/state 组装处完成。
+  it('includes team rows and still excludes staff', () => {
+    const inputs: ScorecardInputs = {
+      agents: [
+        { id: 't', name: 'Hill & Co', role: 'team', active: true },
+        agent('s', 'Sam Staff', 'staff'),
+        agent('a', 'Alice'),
+      ],
+      sales: [sale('t', 500_000, '2026-08-04'), sale('s', 900_000, '2026-08-05'), sale('a', 100_000, '2026-08-06')],
+      listings: [],
+      appraisals: [],
+    };
+    const { rows } = computeScorecard(inputs, AUG);
+    expect(rows.map((r) => r.agentId)).toEqual(['t', 'a']);
+    expect(rows[0]).toMatchObject({ name: 'Hill & Co', gciCents: 500_000, sales: 1 });
+  });
 });

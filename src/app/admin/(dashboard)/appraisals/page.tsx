@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Button, Field, Select, Table, TextInput } from '@/components/admin/ui';
+import { isEligiblePerformer } from '@/lib/domain/eligibility';
 
-type AgentRow = { id: string; name: string; active: boolean; role: 'agent' | 'staff' };
+type AgentRow = { id: string; name: string; active: boolean; role: 'agent' | 'staff' | 'team'; teamId: string | null };
 
 type AppraisalRow = {
   id: string;
@@ -30,7 +31,7 @@ export default function AppraisalsPage() {
   const [error, setError] = useState<string | null>(null);
 
   // 录入下拉只列 active 的 agent(staff 不做估价,与 sales/listings 同口径)。
-  const activeAgents = agents.filter((a) => a.active && a.role === 'agent');
+  const activeAgents = agents.filter(isEligiblePerformer);
 
   const load = useCallback(async () => {
     const [agentsRes, appraisalsRes] = await Promise.all([
