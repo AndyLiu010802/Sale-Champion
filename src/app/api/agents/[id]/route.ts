@@ -72,13 +72,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     }
   }
 
+  // diff-only:只写真正变化的字段,role 变更时补上它蕴含的归一化。
   const values: Partial<typeof agents.$inferInsert> = { ...fields };
-  // team 行自身恒不嵌套、且无生日(role 转为 team 时自动清掉旧生日)。
-  if (nextRole === 'team') {
+  if (fields.role === 'team') {
+    // 转为 team:团队不嵌套、且无生日,旧值在同一 UPDATE 内清掉。
     values.teamId = null;
     values.birthday = null;
-  } else if (existing.teamId && nextRole !== 'agent') {
-    // 归队成员改为 staff → 同一 UPDATE 内自动脱队。
+  } else if (existing.teamId && nextRole === 'staff') {
+    // 归队成员改为 staff → 同一 UPDATE 内自动脱队(staff 不可在队上)。
     values.teamId = null;
   }
 
