@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import type { ScorecardData, ScorecardRow } from '@/lib/domain/scorecard';
 import { formatCount, formatMoney } from '@/lib/format';
+import SplitFlapTitle from '@/components/tv/SplitFlapTitle';
 
 /** Conversion 色块三档(设计 §4):≥50 绿、20–49.9 黄、<20 红;无估价(null)灰 '—'。 */
 function conversionClass(conversionPct: number | null): string {
@@ -38,8 +39,8 @@ export default function ScorecardSlide({
   const rankOf = new Map(data.rows.map((r, i) => [r.agentId, i + 1]));
   return (
     <div className="flex h-full w-full flex-col px-16 py-12">
-      <div className="flex items-baseline justify-between">
-        <h1 className="font-display text-6xl text-neon neon-text">{heading}</h1>
+      <div className="flex items-center justify-between">
+        <SplitFlapTitle text={heading} />
         <span className="font-heading text-3xl text-muted">{subheading}</span>
       </div>
       {data.rows.length === 0 ? (

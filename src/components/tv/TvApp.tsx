@@ -24,8 +24,9 @@ const LEADERBOARD_ITEM_PX = 84;
 const ANNOUNCEMENT_ITEM_PX = 248;
 // ScorecardSlide:表格行 h-[56px](border-collapse,行间无边框无间距);MTD/YTD 共用。
 const SCORECARD_ITEM_PX = 56;
-// Scorecard 头部预留:py-12 上 48 + 标题 text-6xl 60 + mt-8 32 + 汇总块 h-[120px] 120
-// + mt-8 32 + 表头 h-[48px] 48 + py-12 下 48 = 388(与 ScorecardSlide 定高 CSS 同步)。
+// Scorecard 头部预留:py-12 上 48 + 标题行(SplitFlapTitle 定高 h-[60px])60 + mt-8 32
+// + 汇总块 h-[120px] 120 + mt-8 32 + 表头 h-[48px] 48 + py-12 下 48 = 388
+// (与 ScorecardSlide/SplitFlapTitle 定高 CSS 同步)。
 const SCORECARD_RESERVED_PX = 388;
 // 三个分页板块头部预留一致:py-12 上 48 + 标题 text-6xl 60 + mt-10 40 + py-12 下 48。
 const SLIDE_RESERVED_PX = 196;
