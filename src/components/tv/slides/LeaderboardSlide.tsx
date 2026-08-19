@@ -4,12 +4,14 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { LeaderboardEntry, Metric } from '@/lib/types';
 import { formatValue } from '@/lib/format';
+import GradientValue from '@/components/tv/GradientValue';
 
+/** rank 彩色左边:只染 border-left(.glass 会给四边 1px 白描边,四边色类会把它整圈染金)。 */
 function rowBorderClass(rank: number): string {
-  if (rank === 1) return 'border-gold';
-  if (rank === 2) return 'border-silver';
-  if (rank === 3) return 'border-bronze';
-  return 'border-panel-2';
+  if (rank === 1) return 'border-l-gold';
+  if (rank === 2) return 'border-l-silver';
+  if (rank === 3) return 'border-l-bronze';
+  return 'border-l-panel-2';
 }
 
 function rankBadgeClass(rank: number): string {
@@ -52,7 +54,7 @@ export default function LeaderboardSlide({
   return (
     <div className="flex h-full w-full flex-col px-24 py-12">
       <div className="flex items-baseline justify-between">
-        <h1 className="font-display text-6xl text-neon neon-text">{title}</h1>
+        <h1 className="gold-title font-display text-6xl">{title}</h1>
         <span className="font-heading text-3xl text-muted">{periodLabel}</span>
       </div>
       {entries.length === 0 ? (
@@ -68,15 +70,15 @@ export default function LeaderboardSlide({
               initial={{ opacity: 0, x: -40 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.06, duration: 0.35 }}
-              className={`flex h-[72px] shrink-0 items-center gap-8 rounded-lg border-l-4 bg-panel/70 px-8 backdrop-blur-sm ${rowBorderClass(entry.rank)}`}
+              className={`glass flex h-[72px] shrink-0 items-center gap-8 rounded-xl border-l-4 px-8 ${rowBorderClass(entry.rank)}`}
             >
               <span className={`w-16 text-center font-display text-4xl ${rankBadgeClass(entry.rank)}`}>
                 {entry.rank}
               </span>
               <Avatar key={entry.photoUrl ?? 'none'} name={entry.name} photoUrl={entry.photoUrl} />
               <span className="flex-1 truncate font-heading text-4xl text-ink">{entry.name}</span>
-              <span className="font-display text-4xl text-money neon-text">
-                {formatValue(metric, entry.value)}
+              <span className="font-display text-4xl">
+                <GradientValue value={formatValue(metric, entry.value)} />
               </span>
             </motion.div>
           ))}

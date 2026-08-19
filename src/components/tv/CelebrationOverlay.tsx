@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import type { CelebrationPayload } from '@/lib/ws/protocol';
 import { formatMoney } from '@/lib/format';
 import { playAnthem } from '@/components/tv/audio';
+import GradientValue from '@/components/tv/GradientValue';
 import { BIRTHDAY_ANTHEM_ID } from '@/lib/audio/anthems';
 
 type Particle = { left: number; size: number; duration: number; delay: number; color: string };
@@ -125,7 +126,7 @@ export default function CelebrationOverlay({
           </div>
           <p className="mt-8 font-display text-7xl text-neon neon-text">{payload.agentName}</p>
           <p className="mt-6 font-heading text-4xl text-ink">{payload.address}</p>
-          <p className="mt-6 font-display text-8xl text-money neon-text">{formatMoney(payload.salePriceCents)}</p>
+          <p className="mt-6 font-display text-8xl"><GradientValue value={formatMoney(payload.salePriceCents)} /></p>
         </>
       )}
     </motion.div>

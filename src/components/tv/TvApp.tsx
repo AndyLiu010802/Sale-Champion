@@ -24,8 +24,9 @@ const LEADERBOARD_ITEM_PX = 84;
 const ANNOUNCEMENT_ITEM_PX = 248;
 // ScorecardSlide:表格行 h-[56px](border-collapse,行间无边框无间距);MTD/YTD 共用。
 const SCORECARD_ITEM_PX = 56;
-// Scorecard 头部预留:py-12 上 48 + 标题 text-6xl 60 + mt-8 32 + 汇总块 h-[120px] 120
-// + mt-8 32 + 表头 h-[48px] 48 + py-12 下 48 = 388(与 ScorecardSlide 定高 CSS 同步)。
+// Scorecard 头部预留:py-12 上 48 + 标题行(SplitFlapTitle 定高 h-[60px])60 + mt-8 32
+// + 汇总块 h-[120px] 120 + mt-8 32 + 表头 h-[48px] 48 + py-12 下 48 = 388
+// (与 ScorecardSlide/SplitFlapTitle 定高 CSS 同步)。
 const SCORECARD_RESERVED_PX = 388;
 // 三个分页板块头部预留一致:py-12 上 48 + 标题 text-6xl 60 + mt-10 40 + py-12 下 48。
 const SLIDE_RESERVED_PX = 196;
@@ -60,6 +61,21 @@ function useWindowHeight(): number {
     return () => window.removeEventListener('resize', onResize);
   }, []);
   return height;
+}
+
+/** 液态玻璃折射用的隐藏 SVG filter(视觉设计 §1.2):feTurbulence fractalNoise
+ *  baseFrequency 0.008 0.012、numOctaves 2、固定 seed=7(布局稳定不闪变),
+ *  feDisplacementMap scale=13(轻微扭曲,spec 给的 12–14 区间取中)。
+ *  配对/主界面两个渲染分支都要挂,故抽成小组件;width/height 0 不占布局。 */
+function LiquidGlassFilter() {
+  return (
+    <svg aria-hidden="true" width="0" height="0" style={{ position: 'absolute' }}>
+      <filter id="liquid-glass" x="-20%" y="-20%" width="140%" height="140%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="7" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="13" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </svg>
+  );
 }
 
 export default function TvApp() {
@@ -176,6 +192,16 @@ export default function TvApp() {
       cancelled = true;
       clearInterval(timer);
     };
+  }, []);
+
+  // 液态玻璃折射检测(视觉设计 §1.2):仅客户端一次性执行,SSR 安全。Chromium 系
+  // 支持 backdrop-filter: url(#…) 时在 <html> 挂 glass-refract,.glass 升级为折射
+  // 扭曲;不支持(Firefox/Safari)停留在毛玻璃基底。挂 <html> 而非组件根:
+  // 配对/主界面两个分支共用一次检测结果。
+  useEffect(() => {
+    if (typeof CSS !== 'undefined' && CSS.supports('backdrop-filter', 'url(#liquid-glass)')) {
+      document.documentElement.classList.add('glass-refract');
+    }
   }, []);
 
   // Keep rotating while offline too — cached data + OfflineBadge (spec §8);
@@ -339,6 +365,7 @@ export default function TvApp() {
   if (socket.phase === 'connecting' || socket.phase === 'pairing') {
     return (
       <div className="relative h-screen w-screen overflow-hidden bg-bg">
+        <LiquidGlassFilter />
         <SkylineBackground weather={weather} paused={false} />
         <PairingScreen pairCode={socket.pairCode} />
       </div>
@@ -347,6 +374,7 @@ export default function TvApp() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-bg">
+      <LiquidGlassFilter />
       {/* 天际线背景(设计 §2):z-0 垫底;庆祝/生日全屏播放期间暂停渲染循环。 */}
       <SkylineBackground weather={weather} paused={carousel.mode === 'celebrate'} />
       <AnimatePresence mode="wait">
@@ -365,7 +393,7 @@ export default function TvApp() {
       {/* 页码角标(设计 §2):多页才显示;右上角弱霓虹,避开右下 OfflineBadge。 */}
       {currentSlide && currentSlide.pageCount > 1 ? (
         <div
-          className="fixed right-8 top-8 z-40 rounded-lg bg-panel/60 px-4 py-1 font-heading text-3xl text-muted backdrop-blur-sm"
+          className="glass fixed right-8 top-8 z-40 rounded-xl px-4 py-1 font-heading text-3xl text-muted"
           style={{ textShadow: '0 0 12px rgba(0, 229, 255, 0.35)' }}
         >
           {currentSlide.page + 1}/{currentSlide.pageCount}

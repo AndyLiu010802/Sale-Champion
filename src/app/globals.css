@@ -7,3 +7,82 @@ body { @apply bg-bg text-ink font-body; }
 
 .neon-text { text-shadow: 0 0 8px currentColor, 0 0 24px currentColor; }
 .neon-border { box-shadow: 0 0 8px rgba(0, 229, 255, 0.6), inset 0 0 8px rgba(0, 229, 255, 0.15); }
+
+/* —— 液态玻璃面板(视觉设计 §1)——
+   基底(全浏览器):135° 层叠渐变(白高光 0.06 → panel-2 → panel 半透)+ 1px 半透明
+   白描边(border-box 内含,不动任何定高)+ 内侧上高光/下暗边两条 inset 阴影模拟玻璃
+   厚度 + 外部柔投影 + backdrop-filter 毛玻璃。放 @layer components:让元素级工具类
+   (rounded-full / rounded-2xl / border-l-4 / border-l-gold 等)能覆盖边框与圆角——
+   圆角因此不进本类,由各元素自带 rounded-* 决定。 */
+@layer components {
+  .glass {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.06) 0%,
+      rgba(22, 32, 58, 0.55) 40%,
+      rgba(16, 24, 40, 0.68) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+      0 8px 24px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(6px) saturate(1.5);
+    -webkit-backdrop-filter: blur(6px) saturate(1.5);
+  }
+}
+
+/* 折射增强(视觉设计 §1.2):TvApp 检测 CSS.supports('backdrop-filter','url(#liquid-glass)')
+   通过后在 <html> 挂 glass-refract;SVG filter(feTurbulence 固定 seed=7 +
+   feDisplacementMap scale=13)由 TvApp 根部渲染。不支持的浏览器停留在上面的毛玻璃
+   基底,零破损。选择器特异性 0-2-0 > .glass 的 0-1-0,无论层序必胜。 */
+.glass-refract .glass {
+  backdrop-filter: url(#liquid-glass) blur(6px) saturate(1.5);
+  -webkit-backdrop-filter: url(#liquid-glass) blur(6px) saturate(1.5);
+}
+
+/* —— 数值渐变 3D 字效(视觉设计 §3,审查后修订)——
+   前景:青→亮蓝→亮紫水平渐变 clip 到字形,font-weight:900 加粗。立体感与发光完全
+   由 filter: drop-shadow(...) 链实现(与 .gold-title 同模式):第一层深色小幅偏移
+   营造浮雕厚度,第二层亮青光晕。**不再叠加任何与字形重合的深色副本**(原 ::before
+   挤出层 + text-shadow 已删除)——Chromium 对多层 background-clip:text/color:
+   transparent 重叠合成有暗浊渲染 bug,drop-shadow 是后合成特效,不触发该问题。
+   真实 DOM 文本由 GradientValue 组件保证(E2E 数值断言不受影响)。 */
+.value-3d {
+  display: inline-block;
+  font-weight: 900;
+  background: linear-gradient(90deg, #5cf7de 0%, #6fa8ff 55%, #b06cff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 1px rgba(8, 21, 33, 0.55)) drop-shadow(0 0 10px rgba(92, 247, 222, 0.5));
+}
+
+/* —— 黄金荣耀标题(视觉设计 §4)——
+   双层背景 clip 到字形:上层 115° 高光带(shine sweep,background-size 250% 横向,
+   keyframes 前 35% 扫过、余 65% 停在画外 → 每 5s 一次),下层纵向金属金渐变;
+   drop-shadow 轻浮雕 + 柔和金晕。真实 DOM 文本,SLIDE_TITLE_RE 断言不受影响。 */
+.gold-title {
+  font-weight: 900;
+  background-image:
+    linear-gradient(115deg, rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0.85) 50%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, #f9e7a0 0%, #f5c445 45%, #a8741a 100%);
+  background-size: 250% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 100% 0, 0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 2px rgba(62, 36, 2, 0.6)) drop-shadow(0 0 16px rgba(245, 196, 69, 0.3));
+  animation: gold-shine 5s ease-in-out infinite;
+}
+
+/* 100%→0%:超宽背景图从左向右掠过字面(background-position 百分比在图宽 > 容器时
+   反向映射),0%/100% 两端高光带都停在字面之外。 */
+@keyframes gold-shine {
+  0% { background-position: 100% 0, 0 0; }
+  35% { background-position: 0% 0, 0 0; }
+  100% { background-position: 0% 0, 0 0; }
+}

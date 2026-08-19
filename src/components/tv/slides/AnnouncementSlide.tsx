@@ -20,7 +20,7 @@ function AnnouncementImage({ imageUrl, title }: { imageUrl: string; title: strin
 export default function AnnouncementSlide({ announcements }: { announcements: TvAnnouncement[] }) {
   return (
     <div className="flex h-full w-full flex-col px-24 py-12">
-      <h1 className="font-display text-6xl text-neon neon-text">TEAM NEWS</h1>
+      <h1 className="gold-title font-display text-6xl">TEAM NEWS</h1>
       {announcements.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-4xl text-muted">No data yet</p>
@@ -33,7 +33,7 @@ export default function AnnouncementSlide({ announcements }: { announcements: Tv
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1, duration: 0.35 }}
-              className="flex h-[224px] shrink-0 items-start gap-8 rounded-xl bg-panel/70 p-8 backdrop-blur-sm"
+              className="glass flex h-[224px] shrink-0 items-start gap-8 rounded-2xl p-8"
             >
               <div className="flex-1">
                 <h2 className="truncate font-heading text-4xl text-ink">{a.title}</h2>

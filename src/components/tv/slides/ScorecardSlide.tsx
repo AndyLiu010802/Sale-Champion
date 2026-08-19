@@ -3,6 +3,8 @@
 import { motion } from 'framer-motion';
 import type { ScorecardData, ScorecardRow } from '@/lib/domain/scorecard';
 import { formatCount, formatMoney } from '@/lib/format';
+import GradientValue from '@/components/tv/GradientValue';
+import SplitFlapTitle from '@/components/tv/SplitFlapTitle';
 
 /** Conversion 色块三档(设计 §4):≥50 绿、20–49.9 黄、<20 红;无估价(null)灰 '—'。 */
 function conversionClass(conversionPct: number | null): string {
@@ -12,12 +14,12 @@ function conversionClass(conversionPct: number | null): string {
   return 'bg-red-500/20 text-red-300';
 }
 
-function TotalBlock({ label, value, money }: { label: string; value: string; money?: boolean }) {
+function TotalBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col justify-center rounded-xl bg-panel/70 px-8 backdrop-blur-sm">
+    <div className="glass flex flex-col justify-center rounded-2xl px-8">
       <p className="text-2xl text-muted">{label}</p>
-      <p className={`mt-1 font-display text-5xl ${money ? 'text-money neon-text' : 'text-ink'}`}>
-        {value}
+      <p className="mt-1 font-display text-5xl">
+        <GradientValue value={value} />
       </p>
     </div>
   );
@@ -38,8 +40,8 @@ export default function ScorecardSlide({
   const rankOf = new Map(data.rows.map((r, i) => [r.agentId, i + 1]));
   return (
     <div className="flex h-full w-full flex-col px-16 py-12">
-      <div className="flex items-baseline justify-between">
-        <h1 className="font-display text-6xl text-neon neon-text">{heading}</h1>
+      <div className="flex items-center justify-between">
+        <SplitFlapTitle text={heading} />
         <span className="font-heading text-3xl text-muted">{subheading}</span>
       </div>
       {data.rows.length === 0 ? (
@@ -55,9 +57,9 @@ export default function ScorecardSlide({
             <TotalBlock label="TOTAL APPRAISALS" value={String(data.totals.appraisals)} />
             <TotalBlock label="TOTAL LISTINGS" value={formatCount(data.totals.listings)} />
             <TotalBlock label="TOTAL SALES" value={formatCount(data.totals.salesSplit)} />
-            <TotalBlock label="TOTAL GROSS COMM" value={formatMoney(data.totals.gciCents)} money />
+            <TotalBlock label="TOTAL GROSS COMM" value={formatMoney(data.totals.gciCents)} />
           </div>
-          <div className="mt-8 flex-1 overflow-hidden rounded-xl bg-panel/60 px-6 backdrop-blur-sm">
+          <div className="glass mt-8 flex-1 overflow-hidden rounded-2xl px-6">
             {/* Tailwind preflight 已设 border-collapse:collapse,行高恰为 56px;
                 行间不加边框,避免像素累计漂移破坏分页容量计算。 */}
             <table className="w-full table-fixed text-left">
@@ -88,7 +90,7 @@ export default function ScorecardSlide({
                     <td>{formatCount(row.listings)}</td>
                     <td>{formatCount(row.sales)}</td>
                     <td>{formatCount(row.split)}</td>
-                    <td className="font-display text-money">{formatMoney(row.gciCents)}</td>
+                    <td className="font-display"><GradientValue value={formatMoney(row.gciCents)} /></td>
                     <td>
                       <span
                         className={`inline-block rounded px-3 py-1 text-2xl ${conversionClass(row.conversionPct)}`}

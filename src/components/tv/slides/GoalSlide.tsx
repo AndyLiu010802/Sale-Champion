@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import type { GoalProgress } from '@/lib/types';
 import { formatValue } from '@/lib/format';
+import GradientValue from '@/components/tv/GradientValue';
 
 const METRIC_LABELS: Record<GoalProgress['metric'], string> = {
   sales_count: 'SALES',
@@ -18,7 +19,7 @@ const PERIOD_LABELS: Record<GoalProgress['period'], string> = {
 export default function GoalSlide({ goals }: { goals: GoalProgress[] }) {
   return (
     <div className="flex h-full w-full flex-col px-24 py-12">
-      <h1 className="font-display text-6xl text-neon neon-text">TEAM GOALS</h1>
+      <h1 className="gold-title font-display text-6xl">TEAM GOALS</h1>
       {goals.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-4xl text-muted">No data yet</p>
@@ -31,10 +32,10 @@ export default function GoalSlide({ goals }: { goals: GoalProgress[] }) {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.12, duration: 0.4 }}
-              className="rounded-xl bg-panel/70 p-10 backdrop-blur-sm"
+              className="glass rounded-2xl p-10"
             >
               <div className="flex items-baseline justify-between">
-                <h2 className="font-heading text-4xl text-ink">
+                <h2 className="font-heading text-4xl font-bold text-ink">
                   {METRIC_LABELS[goal.metric]}{' '}
                   <span className="text-2xl text-muted">{PERIOD_LABELS[goal.period]}</span>
                 </h2>
@@ -53,8 +54,8 @@ export default function GoalSlide({ goals }: { goals: GoalProgress[] }) {
                     transition={{ delay: 0.3 + i * 0.12, duration: 0.8, ease: 'easeOut' }}
                   />
                 </div>
-                <span className="w-40 text-right font-display text-5xl text-neon neon-text">
-                  {goal.percent}%
+                <span className="w-40 text-right font-display text-5xl">
+                  <GradientValue value={`${goal.percent}%`} />
                 </span>
               </div>
             </motion.div>
