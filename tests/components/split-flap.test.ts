@@ -13,12 +13,12 @@ function mulberry32(seed: number): () => number {
 }
 
 describe('flapSequence', () => {
-  it('ends on the target with 3-6 intermediates, all from FLAP_CHARS', () => {
+  it('ends on the target with 2-3 intermediates, all from FLAP_CHARS', () => {
     for (let seed = 1; seed <= 50; seed++) {
       const seq = flapSequence('S', mulberry32(seed));
       expect(seq[seq.length - 1]).toBe('S');
-      expect(seq.length).toBeGreaterThanOrEqual(4); // 3 中间 + 1 目标
-      expect(seq.length).toBeLessThanOrEqual(7);    // 6 中间 + 1 目标
+      expect(seq.length).toBeGreaterThanOrEqual(3); // 2 中间 + 1 目标
+      expect(seq.length).toBeLessThanOrEqual(4);    // 3 中间 + 1 目标
       for (const ch of seq) expect(FLAP_CHARS).toContain(ch);
     }
   });
@@ -36,5 +36,14 @@ describe('flapSequence', () => {
   it('is deterministic for a fixed rng seed', () => {
     expect(flapSequence('R', mulberry32(42))).toEqual(flapSequence('R', mulberry32(42)));
     expect(randomFlapChar(mulberry32(7))).toBe(randomFlapChar(mulberry32(7)));
+  });
+
+  it('returns a single-element sequence for a non-A-Z target char', () => {
+    // Note: FLAP_CHARS is a plain string, so String#includes does substring
+    // matching — only single chars absent from A-Z (not '' and not multi-char
+    // substrings like 'AB') reliably hit the early-return branch.
+    for (const ch of [' ', '1', '#', '!']) {
+      expect(flapSequence(ch, mulberry32(3))).toEqual([ch]);
+    }
   });
 });
