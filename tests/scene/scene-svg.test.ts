@@ -107,6 +107,19 @@ describe('sceneSvg build output', () => {
     expect(delays.size).toBeGreaterThanOrEqual(4);
   });
 
+  it('lights an exact number of lamps at each schedule level, not a seed lottery', () => {
+    // 阈值是分层的(名次/总数),不是各自独立随机 —— 所以点亮数恒为 floor(lit x N)。
+    // Task 7 交付时用的是独立随机:254 个阈值里最小的 0.0091 高于 DAY_BASE 0.0075,
+    // 白天一盏都不亮,设计要的"零星两三盏"整个落空,而且全部测试照样绿。
+    const ts = Array.from(
+      SCENE_SVG.matchAll(/class="scene-lamp" style="--t:([\d.]+)"/g), (m) => Number(m[1]));
+    expect(ts).toHaveLength(254);
+    const litAt = (lit: number) => ts.filter((t) => t < lit).length;
+    expect(litAt(0.0075)).toBe(2);   // DAY_BASE,windowLights.ts
+    expect(litAt(0.92)).toBe(234);   // NIGHT_PEAK
+    expect(litAt(0)).toBe(0);        // 23:00–05:00 全黑
+  });
+
   it('attributes a slot to the innermost enclosing group, not an outer one', () => {
     // 美术稿里 mountains 嵌套着 mountain-contours 与 mountain-contour-lines(两层)。
     // 构建脚本用栈跟踪归属,所以内层胜出;如果谁把栈简化成单变量(相信"分组是平的"),

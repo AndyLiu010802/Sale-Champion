@@ -23,6 +23,9 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 // 能留下来,是因为 SVG 版本目前按同一种"逐灯位伯努利判定"的语义接的(≈254 个灯光
 // 元素 × 0.0075 ≈ 2 盏,仍落在"两三盏"的目标区间);如果以后哪版实现改成把 windowLit
 // 当整组透明度用(而不是逐元素判定命中率),这个数字就没有意义,必须重新校准。
+// SVG 版进一步把阈值改成**分层**(名次/总数,见 scripts/build-scene.ts):点亮数不再是
+// 期望值而是确定值 floor(lit x 254) —— 白天恰好 2 盏、夜间 234 盏,不看种子运气。
+// tests/scene/scene-svg.test.ts 逐字钉死这三个数。
 //
 // 白天基线校准依据(2026-08-19 实测,mirrors 各画师 litRand < windowLit 的判定逻辑):
 //   city.ts drawWindowGrid  — 6 座 block 塔楼窗格网格(列距 0.008/行距 0.014,内边距

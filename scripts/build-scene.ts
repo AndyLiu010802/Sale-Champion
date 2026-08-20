@@ -33,6 +33,32 @@ const NON_SLOT_GROUPS = new Set(['stars', 'celestial']);
 
 type Slot = { id: string; group: string; lum: number };
 
+/** 预扫一遍数出灯位总数——分层阈值要先知道 N。判定条件与下面改写时逐字一致。 */
+function countLamps(src: string): number {
+  const stack: string[] = [];
+  let group = 'sky';
+  let n = 0;
+  for (const line of src.split('\n')) {
+    const gm = /<g id="([^"]+)"/.exec(line);
+    if (gm) { stack.push(group); group = gm[1]; }
+    if (group === 'hillside-houses' && line.trimStart().startsWith('<rect')) n += 1;
+    else if (group === 'city' && line.includes('rx="0.5"') && line.includes('<rect')) n += 1;
+    if (line.includes('</g>') && stack.length) group = stack.pop()!;
+  }
+  return n;
+}
+
+/** 0..n-1 的固定种子洗牌(Fisher–Yates),用来把分层名次打散到各个灯位上。 */
+function shuffledRanks(n: number, seed: number): number[] {
+  const rand = mulberry32(seed);
+  const a = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function build(): { svg: string; slots: Slot[] } {
   const src = fs.readFileSync(SRC, 'utf8');
   const slots: Slot[] = [];
@@ -57,8 +83,19 @@ function build(): { svg: string; slots: Slot[] } {
 
   let cloudIdx = 0;
   let sparkleIdx = 0;
-  // 灯位阈值用固定种子,保证每次构建产物一致(mulberry32,与场景其余随机同源)。
-  const lampRand = mulberry32(4242);
+
+  // 灯位阈值走**分层**而不是各自独立随机:先数出灯位总数 N,再把 0..N-1 用固定种子洗牌,
+  // 第 k 个遇到的灯位拿到阈值 (shuffled[k] + 0.5) / N。
+  //
+  // 为什么不各自独立取随机数:那样"白天亮几盏"要看种子运气。Task 7 交付时实测就是 0 盏——
+  // 254 个阈值里最小的是 0.0091,而 DAY_BASE 是 0.0075,整批恰好全部落空,设计要的
+  // "白天零星两三盏"一盏都不剩。分层之后点亮数恒为 floor(lit × N):白天 2 盏、夜间 234 盏,
+  // 与种子无关;洗牌保证"亮的是哪几盏"依然是散开的,不会连成一片。
+  const lampTotal = countLamps(src);
+  const lampOrder = shuffledRanks(lampTotal, 4242);
+  let lampIdx = 0;
+  const nextLampThreshold = () =>
+    ((lampOrder[lampIdx++] + 0.5) / lampTotal).toFixed(4);
   const out = src.split('\n').map((line) => {
     const gm = /<g id="([^"]+)"/.exec(line);
     if (gm) { stack.push(group); group = gm[1]; }
@@ -96,9 +133,9 @@ function build(): { svg: string; slots: Slot[] } {
     } else if (group === 'hillside-houses' && line.trimStart().startsWith('<rect')) {
       // 灯位:每个元素带自己的阈值(--t),运行时靠 CSS 阈值比较逐个开关
       // (globals.css .scene-lamp;Task 7 —— 换掉失效的 querySelectorAll + inline display)。
-      rewritten = rewritten.replace('<rect ', `<rect class="scene-lamp" style="--t:${lampRand().toFixed(4)}" `);
+      rewritten = rewritten.replace('<rect ', `<rect class="scene-lamp" style="--t:${nextLampThreshold()}" `);
     } else if (group === 'city' && /fill="var\(--s\d+\)"/.test(rewritten) && line.includes('rx="0.5"')) {
-      rewritten = rewritten.replace('<rect ', `<rect class="scene-lamp" style="--t:${lampRand().toFixed(4)}" `);
+      rewritten = rewritten.replace('<rect ', `<rect class="scene-lamp" style="--t:${nextLampThreshold()}" `);
     } else if (group === 'water-sparkles' && line.trimStart().startsWith('<rect')) {
       // 碎光拆 4 组错开呼吸相位与漂移起点,不再整片同步呼吸(按遇到顺序轮询分桶,
       // 构建产物因此稳定可重现;设计 §5 "拆 4 个子层错开相位")。
