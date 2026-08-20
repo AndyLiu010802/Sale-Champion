@@ -108,20 +108,52 @@ describe('sceneSvg build output', () => {
     expect(SCENE_SVG).toContain('fill="var(--celestial-body, ');
   });
 
-  it('shimmers every water line on its own schedule, so there is no collective beat', () => {
-    // 波光粼粼 = 每条线各自起伏。此前是 4 个相位桶 + 全体同一个 7s 周期,读出来是整片齐闪、
-    // 原地抖动(需求方目验)。周期与相位逐元素随机烧进 style,集体节拍就没有了。
+  it('shimmers every water line on its own curve, period and phase', () => {
+    // 波光粼粼 = 每条线各自起伏,而且它自己的节拍也不能规整。只随机周期不够:一条线仍旧是
+    // 等间隔脉动,盯久了就是节拍器(需求方目验:"水波不是疯狂固定频率闪烁的")。所以曲线
+    // 形状也逐条随机挑,四条曲线的闪法各不相同。
     const shimmer = Array.from(SCENE_SVG.matchAll(
-      /class="scene-(sparkle|ripple)" style="--o:[\d.]+;animation-duration:([\d.]+)s;animation-delay:(-[\d.]+)s"/g,
+      /class="scene-(sparkle|ripple)" style="--o:[\d.]+;animation-name:(scene-[a-z]+-\d);animation-duration:([\d.]+)s;animation-delay:(-[\d.]+)s"/g,
     ));
     const sparkles = shimmer.filter((m) => m[1] === 'sparkle');
     const ripples = shimmer.filter((m) => m[1] === 'ripple');
     expect(sparkles).toHaveLength(323);
     expect(ripples).toHaveLength(12);
-    // 周期+相位的组合几乎不该撞车,撞多了就能看出节拍。
-    expect(new Set(sparkles.map((m) => `${m[2]}|${m[3]}`)).size).toBeGreaterThan(310);
+    // 四条碎光曲线、两条波纹曲线都得真的用上,否则等于白定义。
+    expect(new Set(sparkles.map((m) => m[2])).size).toBe(4);
+    expect(new Set(ripples.map((m) => m[2])).size).toBe(2);
+    // 曲线+周期+相位的组合几乎不该撞车,撞多了就能看出节拍。
+    expect(new Set(sparkles.map((m) => m.slice(2, 5).join('|'))).size).toBeGreaterThan(310);
     // 相位一律为负:正延迟等于全体在 t=0 一起起步,开头几秒会同步闪。
     expect(SCENE_SVG).not.toMatch(/class="scene-(?:sparkle|ripple)"[^>]*animation-delay:[^-]/);
+  });
+
+  it('keeps the water slow — one swell takes seconds, not a strobe', () => {
+    // 早先碎光 2.4–6.4s 一个来回,读出来是疯狂闪烁(需求方目验)。这条把区间钉死:调快
+    // 之前先想清楚,单次起伏只占周期的一小段,周期短了立刻回到频闪。
+    // 一条正则取全部,不用 new RegExp:模板字符串里的 [\d.] 会被 JS 当成无效转义吃成 [d.],
+    // 正则匹配不到任何东西,而 Math.min(...[]) 是 Infinity、Math.max(...[]) 是 -Infinity,
+    // 下面四条断言会全部静默通过 —— 这条测试写第一版时就是这么空跑绿的。
+    const rows = Array.from(SCENE_SVG.matchAll(
+      /class="scene-(sparkle|ripple)"[^>]*animation-duration:([\d.]+)s/g));
+    const durs = (cls: string) => rows.filter((m) => m[1] === cls).map((m) => Number(m[2]));
+    const sparkle = durs('sparkle');
+    const ripple = durs('ripple');
+    expect(sparkle).toHaveLength(323);   // 先钉数量,空数组过不去
+    expect(ripple).toHaveLength(12);
+    expect(Math.min(...sparkle)).toBeGreaterThanOrEqual(8);
+    expect(Math.max(...sparkle)).toBeLessThanOrEqual(18);
+    expect(Math.min(...ripple)).toBeGreaterThanOrEqual(16);
+    expect(Math.max(...ripple)).toBeLessThanOrEqual(32);
+  });
+
+  it('declares every curve the markup asks for', () => {
+    // 曲线名在构建脚本与 globals.css 两处,改一处漏一处的话动画会静默不跑(名字对不上
+    // 的 animation-name 不报错,元素就停在原画的 opacity 上)。
+    const css = fs.readFileSync(path.join(process.cwd(), 'src', 'app', 'globals.css'), 'utf8');
+    const used = new Set(Array.from(SCENE_SVG.matchAll(/animation-name:(scene-[a-z-]+\d)/g), (m) => m[1]));
+    expect(used.size).toBe(6);
+    for (const name of used) expect(css).toContain(`@keyframes ${name} `);
   });
 
   it('hands each line its painted opacity as --o instead of hard-coding one value', () => {

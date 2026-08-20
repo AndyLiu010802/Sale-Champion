@@ -31,6 +31,11 @@ const TOL = 0.04;
  */
 const NON_SLOT_GROUPS = new Set(['stars', 'celestial']);
 
+/** 起伏曲线名册(定义在 globals.css)。逐元素随机挑一条:只随机周期的话,每条线自己
+ *  仍旧是等间隔脉动,盯久了就是节拍器。名字改了这里和 CSS 要一起改。 */
+const SPARKLE_CURVES = ['scene-shimmer-1', 'scene-shimmer-2', 'scene-shimmer-3', 'scene-shimmer-4'];
+const RIPPLE_CURVES = ['scene-undulate-1', 'scene-undulate-2'];
+
 type Slot = { id: string; group: string; lum: number };
 
 /** 预扫一遍数出灯位总数——分层阈值要先知道 N。判定条件与下面改写时逐字一致。 */
@@ -69,14 +74,16 @@ function shuffledRanks(n: number, seed: number): number[] {
  * 周期与负相位,集体节拍消失,看起来才是一片零散的碎光。opacity 属性原样留着,
  * 当 CSS 没生效时的回落。
  */
-function shimmer(line: string, tag: string, cls: string,
+function shimmer(line: string, tag: string, cls: string, names: string[],
                  rand: () => number, minDur: number, maxDur: number): string {
   const op = /opacity="([\d.]+)"/.exec(line);
   if (!op) throw new Error(`shimmer: ${cls} 少了 opacity 基准 —— ${line.trim().slice(0, 80)}`);
+  const name = names[Math.floor(rand() * names.length)];
   const dur = minDur + rand() * (maxDur - minDur);
   const delay = rand() * dur;      // 负相位铺满整个周期,谁都不和谁同时起步
   return line.replace(tag, `${tag.trim()} class="${cls}" style="--o:${op[1]};`
-    + `animation-duration:${dur.toFixed(2)}s;animation-delay:-${delay.toFixed(2)}s" `);
+    + `animation-name:${name};animation-duration:${dur.toFixed(2)}s;`
+    + `animation-delay:-${delay.toFixed(2)}s" `);
 }
 
 function build(): { svg: string; slots: Slot[] } {
@@ -161,12 +168,15 @@ function build(): { svg: string; slots: Slot[] } {
     } else if (group === 'city' && /fill="var\(--s\d+\)"/.test(rewritten) && line.includes('rx="0.5"')) {
       rewritten = rewritten.replace('<rect ', `<rect class="scene-lamp" style="--t:${nextLampThreshold()}" `);
     } else if (group === 'water-sparkles' && line.trimStart().startsWith('<rect')) {
-      // 碎光:闪得深一点、快一点(2.4–6.4s),这是"粼粼"的主体。
-      rewritten = shimmer(rewritten, '<rect ', 'scene-sparkle', sparkleRand, 2.4, 6.4);
+      // 碎光:"粼粼"的主体。周期 8–18s —— 早先 2.4–6.4s 每条线四秒一个来回,读出来是
+      // 疯狂闪烁而不是水光(需求方目验)。慢下来之后单次起伏本身要好几秒,才像水。
+      rewritten = shimmer(rewritten, '<rect ', 'scene-sparkle', SPARKLE_CURVES,
+        sparkleRand, 8, 18);
       sparkleCount += 1;
     } else if (group === 'foreground-ripples' && line.trimStart().startsWith('<path')) {
-      // 前景长波纹:整条一起变,快闪会显得整片在跳,所以只做浅而慢的起伏(7–14s)。
-      rewritten = shimmer(rewritten, '<path ', 'scene-ripple', rippleRand, 7, 14);
+      // 前景长波纹:整条一起变,快闪会显得整片在跳,所以幅度更浅、周期更长(16–32s)。
+      rewritten = shimmer(rewritten, '<path ', 'scene-ripple', RIPPLE_CURVES,
+        rippleRand, 16, 32);
       rippleCount += 1;
     } else if (group === 'sky-clouds' && line.trimStart().startsWith('<path')) {
       // 每朵云单独包一层:速度 120/165/210/255s 循环,负延迟错开起始位置。显示朵数阈值

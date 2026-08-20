@@ -94,14 +94,40 @@ body { @apply bg-bg text-ink font-body; }
 /* 水面波光:线条不移动,只让每条线各自明暗起伏(需求方 2026-08-21 定稿)。亮度基准走
    --o —— 构建期把原画给这条线的 opacity 抄了进来。CSS 动画的 opacity 层叠优先级高于 SVG
    的 opacity 表现属性,keyframes 里写死数值会把原画 0.16–0.54 的明暗层次整体压平、还整体
-   提亮成同一个值,整片一起闪;乘以 --o 才保得住层次。碎光闪得深而快,长波纹只做浅浅的
-   慢起伏——整条线一起快闪会显得整片水在跳。
-   峰值 1.90 是对着 TV 的观感定的:canvas 上层还压着 vignette 与 rgba(6,8,15,~.4) 的压暗幕,
-   照原画的 opacity 原样起伏(1.0 峰)在电视上会闷掉,最亮的一批碎光正好顶到不透明。 */
-@keyframes scene-shimmer  { 0%, 100% { opacity: calc(var(--o, .4) * .30); }
-                            50%      { opacity: calc(var(--o, .4) * 1.90); } }
-@keyframes scene-undulate { 0%, 100% { opacity: calc(var(--o, .4) * .70); }
-                            50%      { opacity: calc(var(--o, .4) * 1.20); } }
+   提亮成同一个值,整片一起闪;乘以 --o 才保得住层次。
+
+   四种形状,构建期逐条随机挑一种。只随机周期不够:每条线自己仍然是等间隔脉动,盯久了
+   就是节拍器(需求方目验:"水波不是疯狂固定频率闪烁的")。四条曲线的闪法各不相同——有的
+   慢慢涨上去,有的先快闪一下再安静大半个周期,有的一亮一暗两次——再配上各自随机的周期
+   与负相位,同一条线的节拍本身就不规则了。基线约等于原画的 opacity,亮起来到 1.9 倍。 */
+@keyframes scene-shimmer-1 { 0%, 22% { opacity: calc(var(--o, .4) *  .85); }
+                             46%     { opacity: calc(var(--o, .4) * 1.90); }
+                             68%     { opacity: calc(var(--o, .4) *  .70); }
+                             100%    { opacity: calc(var(--o, .4) *  .85); } }
+@keyframes scene-shimmer-2 { 0%      { opacity: calc(var(--o, .4) *  .60); }
+                             14%     { opacity: calc(var(--o, .4) * 1.75); }
+                             30%     { opacity: calc(var(--o, .4) *  .55); }
+                             62%     { opacity: calc(var(--o, .4) *  .90); }
+                             100%    { opacity: calc(var(--o, .4) *  .60); } }
+@keyframes scene-shimmer-3 { 0%      { opacity: calc(var(--o, .4) *  .85); }
+                             20%     { opacity: calc(var(--o, .4) * 1.35); }
+                             38%     { opacity: calc(var(--o, .4) *  .50); }
+                             66%     { opacity: calc(var(--o, .4) * 1.90); }
+                             84%     { opacity: calc(var(--o, .4) *  .70); }
+                             100%    { opacity: calc(var(--o, .4) *  .85); } }
+@keyframes scene-shimmer-4 { 0%, 54% { opacity: calc(var(--o, .4) *  .70); }
+                             70%     { opacity: calc(var(--o, .4) * 1.90); }
+                             82%     { opacity: calc(var(--o, .4) *  .60); }
+                             100%    { opacity: calc(var(--o, .4) *  .70); } }
+/* 长波纹:整条线一起变,幅度必须比碎光浅得多、周期也更长,否则看起来是整片水在跳。 */
+@keyframes scene-undulate-1 { 0%      { opacity: calc(var(--o, .4) *  .80); }
+                              36%     { opacity: calc(var(--o, .4) * 1.20); }
+                              72%     { opacity: calc(var(--o, .4) *  .72); }
+                              100%    { opacity: calc(var(--o, .4) *  .80); } }
+@keyframes scene-undulate-2 { 0%, 28% { opacity: calc(var(--o, .4) *  .90); }
+                              50%     { opacity: calc(var(--o, .4) *  .70); }
+                              78%     { opacity: calc(var(--o, .4) * 1.18); }
+                              100%    { opacity: calc(var(--o, .4) *  .90); } }
 @keyframes scene-swell { 0%, 100% { transform: translateY(0) scaleY(1); }
                           50% { transform: translateY(2px) scaleY(1.06); } }
 @keyframes scene-twinkle { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
@@ -110,11 +136,11 @@ body { @apply bg-bg text-ink font-body; }
 
 /* 云:每朵一个包裹 <g>,速度由内联 animation-duration 给,自右向左穿过画面。 */
 .scene-cloud { animation: scene-cross-left linear infinite; }
-/* 水面碎光与前景波纹:周期与负相位逐元素随机,构建期烧进内联 style(shorthand 不带时长,
-   由内联的 animation-duration/-delay 覆盖,与上面的 .scene-cloud 同一套写法)。早先是 4 个
-   相位桶 + 全体 7s 同周期 + 整组左移,读出来是整片齐闪、原地抖动,看不出流动。 */
-.scene-sparkle { animation: scene-shimmer ease-in-out infinite; }
-.scene-ripple  { animation: scene-undulate ease-in-out infinite; }
+/* 水面碎光与前景波纹:曲线、周期、负相位三样都逐元素随机,构建期烧进内联 style。
+   这里只留时间函数与循环次数 —— animation-name 每条线都不一样,写成 shorthand 只会被
+   内联样式整条盖掉,不如把变的部分全部交出去(与 .scene-cloud 的写法不同,原因在此)。 */
+.scene-sparkle,
+.scene-ripple { animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
 .scene-reflect { animation: scene-swell ease-in-out infinite; }
 .scene-star    { animation: scene-twinkle 4s ease-in-out infinite; }
 #stars { opacity: var(--star, 0); }
