@@ -43,31 +43,20 @@ describe('sceneSvg build output', () => {
     expect(byId.size).toBe(SCENE_SLOTS.length);
   });
 
-  it('is in sync with public/scene/hobart.svg — every element survives, plus the loop copies', () => {
-    // 构建期给水面碎光与前景波纹各复制了一份右移一个画幅的副本(无缝循环的前提),所以
-    // 产物比原稿多出的元素数必须**正好**等于这两组的元素数——多一个少一个都说明复制越了界
-    // 或者漏掉了别的东西。
+  it('is in sync with public/scene/hobart.svg — every element survives, one for one', () => {
+    // 水面不再横向漂移(需求方 2026-08-21 定稿:线条不动,只让明暗随机起伏),无缝循环的
+    // 前提也就没有了,构建期不再复制"右移一个画幅"的副本 —— 产物与原稿必须逐个对齐。
     const src = fs.readFileSync(path.join(process.cwd(), 'public', 'scene', 'hobart.svg'), 'utf8');
     const count = (str: string) => (str.match(/<(rect|path|circle|line)\b/g) ?? []).length;
-    const groupBody = (str: string, id: string) => {
-      const open = str.indexOf(`<g id="${id}"`);
-      const bodyStart = str.indexOf('>', open) + 1;
-      return str.slice(bodyStart, str.indexOf('</g>', bodyStart));
-    };
-    const copied = count(groupBody(src, 'water-sparkles')) + count(groupBody(src, 'foreground-ripples'));
-    expect(copied).toBeGreaterThan(0);
-    expect(count(SCENE_SVG)).toBe(count(src) + copied);
+    expect(count(SCENE_SVG)).toBe(count(src));
   });
 
-  it('closes the water loop by repeating exactly one screen width to the right', () => {
-    // 无缝的条件:平移距离 == 图案周期 == 画幅宽 1832(globals.css 的 scene-flow-left)。
-    // 副本偏移量与那条 keyframes 必须一起改,差一点就会看到接缝。
-    for (const id of ['water-sparkles', 'foreground-ripples']) {
-      const open = SCENE_SVG.indexOf(`<g id="${id}"`);
-      expect(open).toBeGreaterThan(-1);
-      const tail = SCENE_SVG.slice(open, open + 200000);
-      expect(tail).toContain('<g transform="translate(1832,0)">');
-    }
+  it('leaves no horizontal drift on the water', () => {
+    // 碎光是横条,沿自身长轴平移几乎不产生运动线索:平移读不出流向,只看得见明暗在跳
+    // (需求方目验)。keyframes、整组平移、右移副本三者一并删除,别再单独复活其中一个。
+    expect(SCENE_SVG).not.toContain('translate(1832,0)');
+    const css = fs.readFileSync(path.join(process.cwd(), 'src', 'app', 'globals.css'), 'utf8');
+    expect(css).not.toContain('scene-flow-left');
   });
 
   it('drives lamps and clouds from thresholds baked into the markup, not data- attributes (Task 7)', () => {
@@ -119,16 +108,31 @@ describe('sceneSvg build output', () => {
     expect(SCENE_SVG).toContain('fill="var(--celestial-body, ');
   });
 
-  it('staggers the sparkle breathing into four phases and leaves the drifting to the group', () => {
-    // 碎光只错开**呼吸**相位(§5 要求拆 4 组)。横向流动必须是整组的:早先每个矩形各自
-    // 平移再弹回、4 组的弹回时刻还不同,看起来是一片乱抖而不是水流(需求方目验指出)。
-    const delays = new Set(
-      Array.from(SCENE_SVG.matchAll(/class="scene-sparkle" style="animation-delay:(-[\d.]+s)"/g),
-        (m) => m[1]),
-    );
-    expect(delays.size).toBe(4);
-    // 单个碎光不许再自带第二条(横移)动画 —— 有逗号就是两条。
-    expect(SCENE_SVG).not.toMatch(/class="scene-sparkle" style="animation-delay:-[\d.]+s,/);
+  it('shimmers every water line on its own schedule, so there is no collective beat', () => {
+    // 波光粼粼 = 每条线各自起伏。此前是 4 个相位桶 + 全体同一个 7s 周期,读出来是整片齐闪、
+    // 原地抖动(需求方目验)。周期与相位逐元素随机烧进 style,集体节拍就没有了。
+    const shimmer = Array.from(SCENE_SVG.matchAll(
+      /class="scene-(sparkle|ripple)" style="--o:[\d.]+;animation-duration:([\d.]+)s;animation-delay:(-[\d.]+)s"/g,
+    ));
+    const sparkles = shimmer.filter((m) => m[1] === 'sparkle');
+    const ripples = shimmer.filter((m) => m[1] === 'ripple');
+    expect(sparkles).toHaveLength(323);
+    expect(ripples).toHaveLength(12);
+    // 周期+相位的组合几乎不该撞车,撞多了就能看出节拍。
+    expect(new Set(sparkles.map((m) => `${m[2]}|${m[3]}`)).size).toBeGreaterThan(310);
+    // 相位一律为负:正延迟等于全体在 t=0 一起起步,开头几秒会同步闪。
+    expect(SCENE_SVG).not.toMatch(/class="scene-(?:sparkle|ripple)"[^>]*animation-delay:[^-]/);
+  });
+
+  it('hands each line its painted opacity as --o instead of hard-coding one value', () => {
+    // CSS 动画的 opacity 层叠优先级高于 SVG 的 opacity 表现属性 —— 早先 keyframes 写死
+    // .55→1,把原画 0.16–0.54 的明暗层次整体压平并提亮成同一个值,这是"齐闪"的另一半原因。
+    // 基准亮度必须逐元素交给动画(--o),且与元素保留的 opacity 属性(CSS 失效时的回落)一致。
+    const rows = Array.from(SCENE_SVG.matchAll(
+      /class="scene-(?:sparkle|ripple)" style="--o:([\d.]+);[^"]*"[^>]*opacity="([\d.]+)"/g));
+    expect(rows).toHaveLength(335);
+    for (const [, o, attr] of rows) expect(o).toBe(attr);
+    expect(new Set(rows.map((m) => m[1])).size).toBeGreaterThan(30);
   });
 
   it('lights an exact number of lamps at each schedule level, not a seed lottery', () => {

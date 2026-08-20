@@ -89,12 +89,19 @@ body { @apply bg-bg text-ink font-body; }
 
 /* —— SVG 场景动态层(SVG 场景设计 §5)——
    全部只改 transform/opacity,不触发重绘;paused 时整棵树 animation-play-state: paused。 */
-/* 水面整体向左匀速流动。平移距离正好等于画幅宽度,而构建期在右侧复制了一份等宽副本,
-   所以一个周期走完时画面与起点逐像素重合,循环点看不出接缝。 */
-@keyframes scene-flow-left { from { transform: translateX(0); } to { transform: translateX(-1832px); } }
 /* 云:从画幅右外侧穿到左外侧,回绕发生在屏幕之外,同样看不见接缝。 */
 @keyframes scene-cross-left { from { transform: translateX(1832px); } to { transform: translateX(-1832px); } }
-@keyframes scene-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+/* 水面波光:线条不移动,只让每条线各自明暗起伏(需求方 2026-08-21 定稿)。亮度基准走
+   --o —— 构建期把原画给这条线的 opacity 抄了进来。CSS 动画的 opacity 层叠优先级高于 SVG
+   的 opacity 表现属性,keyframes 里写死数值会把原画 0.16–0.54 的明暗层次整体压平、还整体
+   提亮成同一个值,整片一起闪;乘以 --o 才保得住层次。碎光闪得深而快,长波纹只做浅浅的
+   慢起伏——整条线一起快闪会显得整片水在跳。
+   峰值 1.90 是对着 TV 的观感定的:canvas 上层还压着 vignette 与 rgba(6,8,15,~.4) 的压暗幕,
+   照原画的 opacity 原样起伏(1.0 峰)在电视上会闷掉,最亮的一批碎光正好顶到不透明。 */
+@keyframes scene-shimmer  { 0%, 100% { opacity: calc(var(--o, .4) * .30); }
+                            50%      { opacity: calc(var(--o, .4) * 1.90); } }
+@keyframes scene-undulate { 0%, 100% { opacity: calc(var(--o, .4) * .70); }
+                            50%      { opacity: calc(var(--o, .4) * 1.20); } }
 @keyframes scene-swell { 0%, 100% { transform: translateY(0) scaleY(1); }
                           50% { transform: translateY(2px) scaleY(1.06); } }
 @keyframes scene-twinkle { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
@@ -103,13 +110,11 @@ body { @apply bg-bg text-ink font-body; }
 
 /* 云:每朵一个包裹 <g>,速度由内联 animation-duration 给,自右向左穿过画面。 */
 .scene-cloud { animation: scene-cross-left linear infinite; }
-/* 水面碎光只负责"呼吸":构建期分 4 组,用 animation-delay 错开相位,让不同区块在不同
-   时刻反光。**横向流动不在这里做** —— 早先每个矩形各自平移再弹回,4 组的弹回时刻还不同,
-   看起来是一片乱抖而不是水流。流动改由下面的整组平移负责。 */
-.scene-sparkle { animation: scene-breathe 7s ease-in-out infinite; }
-/* 整组左流:碎光与波纹各自匀速,速度不同才有层次。 */
-#water-sparkles     { animation: scene-flow-left 220s linear infinite; }
-#foreground-ripples { animation: scene-flow-left 180s linear infinite; }
+/* 水面碎光与前景波纹:周期与负相位逐元素随机,构建期烧进内联 style(shorthand 不带时长,
+   由内联的 animation-duration/-delay 覆盖,与上面的 .scene-cloud 同一套写法)。早先是 4 个
+   相位桶 + 全体 7s 同周期 + 整组左移,读出来是整片齐闪、原地抖动,看不出流动。 */
+.scene-sparkle { animation: scene-shimmer ease-in-out infinite; }
+.scene-ripple  { animation: scene-undulate ease-in-out infinite; }
 .scene-reflect { animation: scene-swell ease-in-out infinite; }
 .scene-star    { animation: scene-twinkle 4s ease-in-out infinite; }
 #stars { opacity: var(--star, 0); }

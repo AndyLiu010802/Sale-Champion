@@ -60,18 +60,23 @@ function shuffledRanks(n: number, seed: number): number[] {
 }
 
 /**
- * 把某个分组的内容在右侧再复制一份(整体 translate 一个画幅宽),使它在 x 方向以画幅为周期。
- * 配合 globals.css 里"整组左移正好一个画幅"的动画,循环点前后画面完全重合,没有接缝。
+ * 水面"波光粼粼":线条不移动,只让每条线各自明暗起伏(需求方 2026-08-21 定稿——碎光是
+ * 横条,沿自身长轴平移几乎不产生运动线索,读出来是原地抖动而不是水流)。
+ *
+ * 每条线烧进三个值:--o 是原画给它的 opacity,**必须**由它来当动画基准 —— CSS 动画的
+ * opacity 层叠优先级高于 SVG 的 opacity 表现属性,keyframes 里写死数值会把原画
+ * 0.16–0.54 的明暗层次整体压平成一个值(整片齐闪的一半原因);另外两个是各自随机的
+ * 周期与负相位,集体节拍消失,看起来才是一片零散的碎光。opacity 属性原样留着,
+ * 当 CSS 没生效时的回落。
  */
-function duplicateForLoop(svg: string, groupId: string): string {
-  const open = svg.indexOf(`<g id="${groupId}"`);
-  if (open < 0) throw new Error(`duplicateForLoop: 找不到分组 ${groupId}`);
-  const bodyStart = svg.indexOf('>', open) + 1;
-  const close = svg.indexOf('</g>', bodyStart);
-  if (close < 0) throw new Error(`duplicateForLoop: 分组 ${groupId} 没有闭合`);
-  const body = svg.slice(bodyStart, close);
-  const copy = `<g transform="translate(1832,0)">${body}</g>`;
-  return svg.slice(0, close) + copy + svg.slice(close);
+function shimmer(line: string, tag: string, cls: string,
+                 rand: () => number, minDur: number, maxDur: number): string {
+  const op = /opacity="([\d.]+)"/.exec(line);
+  if (!op) throw new Error(`shimmer: ${cls} 少了 opacity 基准 —— ${line.trim().slice(0, 80)}`);
+  const dur = minDur + rand() * (maxDur - minDur);
+  const delay = rand() * dur;      // 负相位铺满整个周期,谁都不和谁同时起步
+  return line.replace(tag, `${tag.trim()} class="${cls}" style="--o:${op[1]};`
+    + `animation-duration:${dur.toFixed(2)}s;animation-delay:-${delay.toFixed(2)}s" `);
 }
 
 function build(): { svg: string; slots: Slot[] } {
@@ -97,7 +102,12 @@ function build(): { svg: string; slots: Slot[] } {
   let gradGroup: string | null = null;
 
   let cloudIdx = 0;
-  let sparkleIdx = 0;
+  // 水面起伏的周期/相位逐元素随机(固定种子 → 构建产物可重现)。碎光与波纹各走一条流:
+  // 往任一组加减元素都不会扰动另一组已经烧好的参数。
+  const sparkleRand = mulberry32(9101);
+  const rippleRand = mulberry32(9102);
+  let sparkleCount = 0;
+  let rippleCount = 0;
 
   // 灯位阈值走**分层**而不是各自独立随机:先数出灯位总数 N,再把 0..N-1 用固定种子洗牌,
   // 第 k 个遇到的灯位拿到阈值 (shuffled[k] + 0.5) / N。
@@ -151,14 +161,13 @@ function build(): { svg: string; slots: Slot[] } {
     } else if (group === 'city' && /fill="var\(--s\d+\)"/.test(rewritten) && line.includes('rx="0.5"')) {
       rewritten = rewritten.replace('<rect ', `<rect class="scene-lamp" style="--t:${nextLampThreshold()}" `);
     } else if (group === 'water-sparkles' && line.trimStart().startsWith('<rect')) {
-      // 碎光拆 4 组错开呼吸相位与漂移起点,不再整片同步呼吸(按遇到顺序轮询分桶,
-      // 构建产物因此稳定可重现;设计 §5 "拆 4 个子层错开相位")。
-      // 只错开**呼吸**相位;横向流动由整组平移负责(globals.css #water-sparkles),
-      // 早先让每个矩形各自漂移再弹回,看起来是乱抖而不是水流。
-      const breatheDelay = ((sparkleIdx % 4) * 7) / 4;
-      rewritten = rewritten.replace('<rect ',
-        `<rect class="scene-sparkle" style="animation-delay:-${breatheDelay}s" `);
-      sparkleIdx += 1;
+      // 碎光:闪得深一点、快一点(2.4–6.4s),这是"粼粼"的主体。
+      rewritten = shimmer(rewritten, '<rect ', 'scene-sparkle', sparkleRand, 2.4, 6.4);
+      sparkleCount += 1;
+    } else if (group === 'foreground-ripples' && line.trimStart().startsWith('<path')) {
+      // 前景长波纹:整条一起变,快闪会显得整片在跳,所以只做浅而慢的起伏(7–14s)。
+      rewritten = shimmer(rewritten, '<path ', 'scene-ripple', rippleRand, 7, 14);
+      rippleCount += 1;
     } else if (group === 'sky-clouds' && line.trimStart().startsWith('<path')) {
       // 每朵云单独包一层:速度 120/165/210/255s 循环,负延迟错开起始位置。显示朵数阈值
       // (--i)也在这里烧进标记,运行时靠 CSS 阈值比较(globals.css .scene-cloud;Task 7)。
@@ -172,14 +181,11 @@ function build(): { svg: string; slots: Slot[] } {
     return rewritten;
   }).join('\n');
 
-  // 无缝循环的前提:图案在 x 方向以画幅宽度为周期。给这两组在右侧各复制一份等宽副本,
-  // 整组左移 1832 走完一个周期时,副本正好落到原件的位置,画面逐像素重合。
-  const seamless = duplicateForLoop(duplicateForLoop(out, 'water-sparkles'), 'foreground-ripples');
-
-  const svg = seamless.replace(
+  const svg = out.replace(
     '<svg xmlns="http://www.w3.org/2000/svg" width="1832" height="859" viewBox="0 0 1832 859" fill="none">',
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1832 859" fill="none" '
     + 'preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;display:block">');
+  console.log(`[build-scene] ${sparkleCount} sparkles + ${rippleCount} ripples shimmering`);
   return { svg, slots };
 }
 

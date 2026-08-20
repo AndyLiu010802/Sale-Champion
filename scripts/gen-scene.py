@@ -369,8 +369,8 @@ def water_sparkles(rng):
         count = 12 + int(rng.random() * 5)
         for _ in range(count):
             w = rng.uniform(28, 96) + depth * rng.uniform(0, 70)
-            # 必须整块落在画幅内:水面靠"整组左移一个画幅 + 右侧等宽副本"做无缝循环,
-            # 任何跨出 [0, W] 的矩形都会在回绕时多叠一层,接缝就露馅了(实测像素比对发现)。
+            # 整块落在画幅内。当初这么改是为了无缝循环(整组左移 + 右侧等宽副本),而横移
+            # 已于 2026-08-21 取消;约束留着只是因为跨出 [0, W] 的碎光会被画幅边缘切断。
             x = rng.uniform(0, W - w)
             h = rng.choice([2, 2, 3, 4])
             op = rng.uniform(0.16, 0.54)
