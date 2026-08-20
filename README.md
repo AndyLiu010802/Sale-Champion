@@ -81,10 +81,19 @@ See `.env.example` for the authoritative list:
      (with `local`, uploads are written to the container disk and are lost on
      every redeploy — use R2 in production)
    - `ADMIN_EMAIL`, `ADMIN_PASSWORD` — credentials for the first admin
-4. Deploy (push to the connected branch). Database migrations run
-   automatically on server start.
+4. Deploy (push to the connected branch). `railway.json` declares a
+   `preDeployCommand` of `npm run db:migrate`, which applies pending migrations
+   once, before the new container starts serving. The app itself never runs
+   DDL — it connects, checks that the schema is at least as new as the code,
+   and refuses to start if it is not.
 5. Run the seed once against the deployed service:
-   `railway run npm run db:seed` (append `-- --demo` for demo data).
+   `railway run npm run db:seed` (append `-- --demo` for demo data). The
+   pre-deploy step has already created the schema by then; if you ever seed a
+   database that has never been deployed to, run `railway run npm run db:migrate`
+   first.
+6. Leave the service's **Custom Start Command empty** so the `Dockerfile` `CMD`
+   is used. In particular it must not run the seed: seeding on every boot is
+   what caused the 2026-08-20 outage (see *Migrations* below).
 
 ## Production considerations
 
@@ -100,6 +109,33 @@ See `.env.example` for the authoritative list:
   rows before inserting (not an atomic upsert), so run it once from a single
   instance. Do not run it concurrently from multiple replicas or as part of a
   rolling deploy that fires on every instance.
+
+### Migrations
+
+Migrations are a deploy step, not a boot step. `npm run db:migrate` takes a
+PostgreSQL advisory lock, applies everything pending, and exits; the serving
+process only connects and calls `assertSchemaAtHead`, which refuses to listen
+when the newest applied migration is older than the newest file in
+`drizzle/meta/_journal.json`.
+
+Both halves of that exist because of a real outage on 2026-08-20. Drizzle's
+migrator reads "newest applied migration" *outside* its transaction and takes no
+lock of its own, so two processes that migrate at once will both decide the same
+migration is pending — the second one then replays DDL against a schema that
+already has it and throws. Because migrations used to run inside `getDb()`,
+which the server awaits before `server.listen()`, that throw meant nothing ever
+bound the port, the health check failed for five minutes and the deploy was
+rolled back with the site down. Two rules follow:
+
+- **Write every migration so it can be applied twice.** `drizzle-kit generate`
+  does not do this for you: prefer `ADD COLUMN IF NOT EXISTS`, and
+  `DROP CONSTRAINT IF EXISTS` before `ADD CONSTRAINT`.
+- **Nothing that serves requests may run migrations.** Keep the Railway start
+  command empty, and never wire `db:seed` (which calls `getDb()`) into startup.
+
+Failing closed is deliberate. A container that will not start leaves the
+previous one serving; a container that starts against a stale schema looks
+healthy and then 42703s on the first request that touches a new column.
 - **`/api/tv/register` has no authentication and no rate limiting** — any
   client that can reach it can mint a TV pairing code. Deploy on a trusted or
   internal network, or add rate limiting in front of it at the reverse proxy.

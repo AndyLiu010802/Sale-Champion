@@ -5,7 +5,7 @@ import http from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { and, asc, eq } from 'drizzle-orm';
-import { getDb, type Db } from '@/lib/db';
+import { assertSchemaAtHead, getDb, type Db } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
 import { agents, orgs, screens } from '@/lib/db/schema';
 import { getHub, type Hub } from '@/lib/ws/hub';
@@ -67,7 +67,8 @@ export async function startServer(
   opts: { withNext?: boolean } = {},
 ): Promise<http.Server> {
   const withNext = opts.withNext ?? true;
-  const db = await getDb(); // runs migrations on first boot
+  const db = await getDb();     // 只连库:迁移已移出启动路径(见 src/lib/db/index.ts)
+  await assertSchemaAtHead(db); // schema 落后于代码就拒绝监听,不做"绿的但坏的"服务
   const hub = getHub();
 
   let nextHandle:

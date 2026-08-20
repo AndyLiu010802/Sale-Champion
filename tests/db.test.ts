@@ -3,7 +3,7 @@ import path from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
 import { freshDb, seedBasics } from './helpers/db';
-import type { Db } from '@/lib/db';
+import { assertSchemaAtHead, getDb, migrateToLatest, type Db } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
 import { seed } from '@/lib/db/seed';
 import { DEFAULT_SETTINGS } from '@/lib/settings';
@@ -195,5 +195,39 @@ describe('migration idempotency', () => {
     await expect(
       db.insert(agents).values({ id: crypto.randomUUID(), orgId, name: 'Orphan', teamId: 'nope' }),
     ).rejects.toThrow();
+  });
+});
+
+// 迁移移出启动路径后的守门(生产事故 2026-08-20 的结构性修复):应用启动只连库,
+// 迁移由 pre-deploy 的 npm run db:migrate 单独跑。启动时校验 schema 不落后于代码,
+// 落后就拒绝监听——宁可红,也不要"健康检查绿、一查 team_id 就 42703"。
+describe('assertSchemaAtHead', () => {
+  const HEAD = 1787181726662; // drizzle/meta/_journal.json 里最新的 when
+
+  it('passes on a freshly migrated database', async () => {
+    const db = await freshDb();
+    await expect(assertSchemaAtHead(db)).resolves.toBeUndefined();
+  });
+
+  it('refuses to serve when the newest applied migration is behind the code', async () => {
+    const db = await freshDb();
+    await db.execute(sql`delete from drizzle.__drizzle_migrations where created_at = ${HEAD}`);
+    await expect(assertSchemaAtHead(db)).rejects.toThrow(/schema is behind the code/);
+  });
+
+  it('refuses to serve when the migration ledger does not exist at all', async () => {
+    const db = await freshDb();
+    await db.execute(sql`drop schema drizzle cascade`);
+    await expect(assertSchemaAtHead(db)).rejects.toThrow(/never been migrated/);
+  });
+});
+
+describe('migrateToLatest', () => {
+  it('is safe to run twice', async () => {
+    await freshDb();
+    await expect(migrateToLatest()).resolves.toBeUndefined();
+    await expect(migrateToLatest()).resolves.toBeUndefined();
+    const db = await getDb();
+    await expect(assertSchemaAtHead(db)).resolves.toBeUndefined();
   });
 });
