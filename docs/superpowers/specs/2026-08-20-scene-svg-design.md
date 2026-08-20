@@ -36,7 +36,7 @@ SVG 内联进 DOM,只留一小块 canvas 给粒子。
 
 **保留不动**:`palette.ts`(6 关键帧 + `phaseFromClock` + `sunPosition` + `nightProgress`)、`weather.ts`、`weatherCache.ts`、`/api/tv/weather`。这套引擎继续当大脑,只是换了被它驱动的画布。
 
-**搬家**:`windowLitSchedule` 从 `hobart/paint.ts` 移到 `src/lib/scene/windows.ts`,**行为与现有 10 条测试逐字不变**(白天基线、18–19 点 smoothstep 爬升、19–22 点峰值、22–23 点回落、23–05 点全黑、纯时钟)。
+**搬家**:`windowLitSchedule` 从 `hobart/paint.ts` 移到 `src/lib/scene/windowLights.ts`,**行为与现有 10 条测试逐字不变**(白天基线、18–19 点 smoothstep 爬升、19–22 点峰值、22–23 点回落、23–05 点全黑、纯时钟)。
 
 ## 4. 上色系统
 
@@ -61,9 +61,9 @@ SVG 内联进 DOM,只留一小块 canvas 给粒子。
 | `sky` | `skyTop` → `skyHor` |
 | `sky-clouds` | `haze` → `haze` 与 `skyTop` 的中点(云比雾霭亮一档) |
 | `mountains` 及其子组 | `buildingFar` → `buildingNear` |
-| `hillside-houses` | `window`,整组透明度 = `windowLit` |
+| `hillside-houses` | `window`,**逐元素**按 `windowLit` 做伯努利判定(不是整组透明度——见计划 Task 4 Step 5) |
 | `city` 楼体 | `buildingNear` → `buildingMid` |
-| `city` 窗户(源色 `#6B7476` / `#8C918E`) | `window`,亮度 = `windowLit` |
+| `city` 窗户(源色 `#6B7476`) | `window`,同上逐元素判定 |
 | `tasman-bridge` | `buildingMid` → `buildingNear` |
 | `water` | `waterDeep` → `waterLight` |
 | `water-sparkles` | `waterLight` → `skyHor` |
