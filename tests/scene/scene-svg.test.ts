@@ -49,6 +49,64 @@ describe('sceneSvg build output', () => {
     expect(count(SCENE_SVG)).toBe(count(src));
   });
 
+  it('drives lamps and clouds from thresholds baked into the markup, not data- attributes (Task 7)', () => {
+    // 逐元素 querySelectorAll + inline display 会在任何一次 innerHTML 重新赋值后静默失效
+    // (Task 7 诊断)。改法是把阈值写进 CSS 自定义属性,标记里不该再留 data-t/data-i。
+    expect(SCENE_SVG).not.toMatch(/data-t=|data-i=/);
+
+    const lampCount = (SCENE_SVG.match(/class="scene-lamp"/g) ?? []).length;
+    const lampWithThreshold = (SCENE_SVG.match(/class="scene-lamp" style="--t:\d+\.\d+"/g) ?? []).length;
+    expect(lampCount).toBeGreaterThan(0);
+    expect(lampWithThreshold).toBe(lampCount);
+
+    const cloudCount = (SCENE_SVG.match(/class="scene-cloud"/g) ?? []).length;
+    const cloudWithIndex = (SCENE_SVG.match(/class="scene-cloud" style="--i:\d+;/g) ?? []).length;
+    expect(cloudCount).toBeGreaterThan(0);
+    expect(cloudWithIndex).toBe(cloudCount);
+  });
+
+  it('adds #stars (140 stars) and #celestial between #sky and #sky-clouds, so clouds occlude both', () => {
+    const skyIdx = SCENE_SVG.indexOf('<g id="sky">');
+    const skyCloudsIdx = SCENE_SVG.indexOf('<g id="sky-clouds">');
+    const starsIdx = SCENE_SVG.indexOf('<g id="stars">');
+    const celestialIdx = SCENE_SVG.indexOf('<g id="celestial">');
+    expect(skyIdx).toBeGreaterThanOrEqual(0);
+    expect(skyCloudsIdx).toBeGreaterThan(skyIdx);
+    expect(starsIdx).toBeGreaterThan(skyIdx);
+    expect(starsIdx).toBeLessThan(skyCloudsIdx);
+    expect(celestialIdx).toBeGreaterThan(skyIdx);
+    expect(celestialIdx).toBeLessThan(skyCloudsIdx);
+
+    const starsBlock = SCENE_SVG.slice(starsIdx, SCENE_SVG.indexOf('</g>', starsIdx));
+    const starCount = (starsBlock.match(/<circle\b/g) ?? []).length;
+    expect(starCount).toBe(140);
+
+    const celestialBlock = SCENE_SVG.slice(celestialIdx, SCENE_SVG.indexOf('</g>', celestialIdx));
+    expect(celestialBlock).toContain('class="scene-celestial-glow"');
+    expect(celestialBlock).toContain('class="scene-celestial-body"');
+    // 两个圆的坐标必须留在 0,靠 #celestial 的 CSS transform 定位——SVG 几何属性不吃
+    // var(),cx/cy 写成变量会静默不生效(build-scene.ts 顶部注释,与灯位阈值是同一类坑)。
+    expect(celestialBlock).toMatch(/<circle[^>]*cx="0"[^>]*cy="0"/g);
+  });
+
+  it('does not route stars/celestial colour through the numbered slot system', () => {
+    // 星星与日月只有 1–2 个语义色,硬套色槽的组内亮度归一化没意义(见 build-scene.ts
+    // NON_SLOT_GROUPS 注释)——它们该用固定、非编号的 CSS 变量,不该出现在 SCENE_SLOTS。
+    expect(SCENE_SLOTS.some((s) => s.group === 'stars' || s.group === 'celestial')).toBe(false);
+    expect(SCENE_SVG).toMatch(/fill="var\(--star-color, #[0-9A-Fa-f]{6}\)"/);
+    expect(SCENE_SVG).toContain('fill="var(--celestial-glow, ');
+    expect(SCENE_SVG).toContain('fill="var(--celestial-body, ');
+  });
+
+  it('splits water-sparkles into (at least) four staggered animation-delay phases', () => {
+    // 之前 water-sparkles 整组共用一个动画,全场碎光同步呼吸/漂移(§5 要求拆 4 组错开)。
+    const delays = new Set(
+      Array.from(SCENE_SVG.matchAll(/class="scene-sparkle" style="animation-delay:(-[\d.]+s,-[\d.]+s)"/g),
+        (m) => m[1]),
+    );
+    expect(delays.size).toBeGreaterThanOrEqual(4);
+  });
+
   it('attributes a slot to the innermost enclosing group, not an outer one', () => {
     // 美术稿里 mountains 嵌套着 mountain-contours 与 mountain-contour-lines(两层)。
     // 构建脚本用栈跟踪归属,所以内层胜出;如果谁把栈简化成单变量(相信"分组是平的"),

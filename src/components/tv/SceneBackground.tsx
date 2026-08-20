@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { phaseFromClock } from '@/lib/scene/palette';
+import { phaseFromClock, sunPosition, nightProgress } from '@/lib/scene/palette';
 import { effectsFromWeather } from '@/lib/scene/weather';
 import { scenePaint } from '@/lib/scene/paint';
 import { windowLitSchedule } from '@/lib/scene/windowLights';
@@ -68,6 +68,16 @@ export default function SceneBackground({
       const now = new Date();
       const t = phaseFromClock(now, w?.sunrise, w?.sunset);
       const lit = windowLitSchedule(now);
+
+      // 日/月位置:每次 tick 都写,不进下面的记忆化——夜里 t 整段恒 1(NIGHT 关键帧是
+      // 平的),月弧要靠 nightProgress(now, …) 按真实时钟连续推进,锁进 t/lit 记忆化的话
+      // 整夜 key 不变,月亮会钉死不动(此前 Task 7 已诊断过一次"记忆化钉住旧状态"的坑,
+      // 这里是同一类问题的另一处)。
+      const body = sunPosition(t, nightProgress(now, w?.sunrise, w?.sunset));
+      root.style.setProperty('--body-x', `${(body.x * 1832).toFixed(1)}px`);
+      root.style.setProperty('--body-y', `${(body.y * 859 * 0.6).toFixed(1)}px`);
+      root.style.setProperty('--body-op', body.y < 1.04 ? '1' : '0');
+
       const next = `${Math.round(t / CACHE_T_STEP)}|${Math.round(lit / WINDOW_LIT_STEP)}`
         + `|${Math.round(fx.cloudiness * 10)}`;
       if (next === key) return;
@@ -77,23 +87,16 @@ export default function SceneBackground({
       for (const [name, value] of Object.entries(slotColors(sp))) {
         root.style.setProperty(name, value);
       }
-      // 灯光整体亮度:山坡房屋与城市窗户共用窗灯作息
+      // 灯光整体亮度:山坡房屋与城市窗户共用窗灯作息。灯位/云朵可见性本身不再由 JS 逐元素
+      // toggle(见 globals.css .scene-lamp/.scene-cloud 的 CSS 阈值比较)——只需要写下面
+      // 这几个系数,标记里烧好的 --t/--i 会自己跟 --lit/--cloud-count 比较。
       root.style.setProperty('--lit', String(lit));
-      // 云量决定显示几朵云(2–8)
       root.style.setProperty('--cloud-count', String(2 + Math.round(fx.cloudiness * 6)));
       root.style.setProperty('--star', String(sp.sky.star * (1 - fx.cloudiness * 0.85)));
-
-      // 灯位不能用整组透明度(见 SceneBackground 设计约束):windowLitSchedule 返回的是
-      // 每盏灯独立点亮的概率,逐元素伯努利判定才能保住"白天零星两三盏"的细节。
-      root.querySelectorAll<HTMLElement>('.scene-lamp').forEach((el) => {
-        el.style.display = Number(el.dataset.t) < lit ? '' : 'none';
-      });
-
-      // 云的显示朵数:构建期已给每朵云加了 data-i,用 JS 直接控制。
-      const count = 2 + Math.round(fx.cloudiness * 6);
-      root.querySelectorAll<HTMLElement>('.scene-cloud').forEach((el, i) => {
-        el.style.display = i < count ? '' : 'none';
-      });
+      // 日/月圆盘与光晕色:直接读 ScenePaint,不进色槽系统(见 build-scene.ts 的
+      // NON_SLOT_GROUPS 注释)。
+      root.style.setProperty('--celestial-glow', rgba(sp.sky.glow, 1));
+      root.style.setProperty('--celestial-body', rgba(sp.sky.sun, 1));
     };
     apply();
     const id = window.setInterval(apply, TICK_MS);
