@@ -8,7 +8,7 @@
 //   0.84 SUNSET  日落时刻(橙红)
 //   1    NIGHT   日落后 40 分钟起整夜恒定(月亮位置由 nightProgress 另推)
 
-export type Rgb = [number, number, number];
+import type { Rgb } from '@/lib/scene/types';
 
 export type Palette = {
   skyTop: Rgb;       // 天空渐变顶色

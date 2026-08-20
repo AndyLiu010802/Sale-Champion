@@ -86,3 +86,42 @@ body { @apply bg-bg text-ink font-body; }
   35% { background-position: 0% 0, 0 0; }
   100% { background-position: 0% 0, 0 0; }
 }
+
+/* —— SVG 场景动态层(SVG 场景设计 §5)——
+   全部只改 transform/opacity,不触发重绘;paused 时整棵树 animation-play-state: paused。 */
+@keyframes scene-drift { from { transform: translateX(0); } to { transform: translateX(2196px); } }
+@keyframes scene-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes scene-swell { 0%, 100% { transform: translateY(0) scaleY(1); }
+                          50% { transform: translateY(2px) scaleY(1.06); } }
+@keyframes scene-twinkle { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+.scene-root.is-paused * { animation-play-state: paused !important; }
+
+/* 云:每朵一个包裹 <g>,速度由内联 animation-duration 给,循环横穿两倍画幅后回绕 */
+.scene-cloud { animation: scene-drift linear infinite; }
+/* 水面碎光:构建期按遇到顺序分 4 组,组内共享呼吸/漂移周期,组间靠 animation-delay
+   错开相位与横移起点(内联在每个元素上)——不再整片同步呼吸(Task 7)。 */
+.scene-sparkle { animation: scene-breathe 7s ease-in-out infinite, scene-drift 220s linear infinite; }
+.scene-ripple  { animation: scene-drift linear infinite; }
+.scene-reflect { animation: scene-swell ease-in-out infinite; }
+.scene-star    { animation: scene-twinkle 4s ease-in-out infinite; }
+#stars { opacity: var(--star, 0); }
+
+/* 灯位/云朵可见性:阈值(--t/--i)构建期烧进每个元素的 style 里,CSS 直接比较——逐元素
+   querySelectorAll + inline display 在任何一次 innerHTML 重新赋值后都会静默失效
+   (Task 7 诊断:StartOverlay→轮播切换后 254 盏灯全部卡在可见),这条改法擦不掉。
+   乘 1000 把差值撑成陡直阶跃:同一盏灯不会因为阈值离 --lit 很近而显示"半亮"。 */
+.scene-lamp  { opacity: clamp(0, calc((var(--lit, 0) - var(--t, 1)) * 1000), 1); }
+.scene-cloud { opacity: clamp(0, calc((var(--cloud-count, 0) - var(--i, 99)) * 1000), 1); }
+
+/* 日/月:位置由装配器写 --body-x/--body-y(translate,单位随值一起写死为 px)、地平线下
+   即 --body-op:0。光晕/本体色直接读 --celestial-glow/--celestial-body(装配器每帧从
+   ScenePaint 的 sky.glow/sky.sun 写入,取代 fallback 占位色)——半径固定,不必也不能靠
+   CSS 变量驱动(SVG 几何属性不吃 var(),见 build-scene.ts 顶部注释)。 */
+#celestial {
+  transform: translate(var(--body-x, 0px), var(--body-y, 0px));
+  opacity: var(--body-op, 0);
+}
+
+/* 雷暴闪电时给山体分组打一帧高亮(替代旧 canvas 描边远脊——几何随画师一起删了)。 */
+.scene-flash { filter: brightness(1.6); }

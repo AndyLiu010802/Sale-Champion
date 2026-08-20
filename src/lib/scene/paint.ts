@@ -5,7 +5,7 @@
 
 import { getPalette } from '@/lib/scene/palette';
 import type { SceneEffects } from '@/lib/scene/weather';
-import type { Rgb, ScenePaint } from './geometry';
+import type { Rgb, ScenePaint } from '@/lib/scene/types';
 
 // 灯光固定暖色(全帧同色,强度由各 alpha 控)。
 const BRIDGE_LAMP: Rgb = [255, 214, 140];
@@ -30,7 +30,7 @@ const STOPS = [0, 0.28, 0.5, 0.68, 0.84, 1];
 // 其余帧按时段氛围定稿写死;色调质感打磨(2026-08-19 二轮):MORNING 云暖白化、
 // GOLDEN 天空/云饱和度上调(更浓烈暖金)、NIGHT 天空/云整体压深(更藏蓝);
 // 只动 sky/cloud 字段,far/mid/near 剪影色与水面/灯光组不动 —— 进深五档亮度序与既有
-// 单测(hobart.test.ts)逐字钉死的 MIDDAY 值均不受影响。
+// 单测(tests/scene/paint.test.ts)逐字钉死的 MIDDAY 值均不受影响。
 // 每一帧内进深亮度严格递减:ridgeFar > ridgeNear > bridgeSil > midSil > wharfSil > fgSil
 // (已逐帧验算;线性插值保序,任意 t 都成立)。
 const FRAMES: HFrame[] = [
@@ -98,12 +98,6 @@ function lerp(a: number, b: number, u: number): number {
   return a + (b - a) * u;
 }
 
-/** 三次平滑过渡(Hermite ease):0..1 之间导数在两端为 0,无硬折线突变。 */
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const u = clamp01((x - edge0) / (edge1 - edge0));
-  return u * u * (3 - 2 * u);
-}
-
 function lerpRgb(a: Rgb, b: Rgb, u: number): Rgb {
   return [lerp(a[0], b[0], u), lerp(a[1], b[1], u), lerp(a[2], b[2], u)];
 }
@@ -140,6 +134,8 @@ function grayMix(c: Rgb, amount: number): Rgb {
  * flickerEpoch = 4s 窗灯闪烁纪元(装配器注入;city 画师用它做低频闪烁)。
  * 返回的色槽已按云量/雨量去饱和;灯光组(light.* 与 water.glitter)保持暖色不压灰,
  * 波光强度按云量衰减(云遮日)。
+ * 注意:返回的 light.windowLit 是 getPalette(t) 的日出日落系数,不是真实作息;调用方
+ * 必须自己用 windowLitSchedule(now) 的结果覆盖它,直接渲染这里的 windowLit 会用错作息表。
  */
 export function scenePaint(t: number, fx: SceneEffects, flickerEpoch = 0): ScenePaint {
   const base = getPalette(t);
@@ -177,37 +173,4 @@ export function scenePaint(t: number, fx: SceneEffects, flickerEpoch = 0): Scene
     },
     dim: base.dim,
   };
-}
-
-// —— 窗灯作息调度(独立于 phaseFromClock 的日出日落相位;只看现场时钟"几点钟")——
-//
-// 白天基线校准依据(2026-08-19 实测,mirrors 各画师 litRand < windowLit 的判定逻辑):
-//   city.ts drawWindowGrid  — 6 座 block 塔楼窗格网格(列距 0.008/行距 0.014,内边距
-//     0.003),逐塔楼实测网格数 84+48+65+33+48+44 = 322 格,命中概率直接用 windowLit;
-//   foreground.ts           — 屋顶窗点 4 个候选,命中概率 windowLit×0.5;
-//   waterfront.ts           — 4 座仓库×2 处灯位 = 8 个候选,命中概率 windowLit×0.6;
-//   mountain.ts             — 山脚发光点阵 30 个候选,命中概率 windowLit×0.4。
-// 折算成同权重下的"等效候选数"= 322×1 + 4×0.5 + 8×0.6 + 30×0.4 ≈ 340.8(≥ 原设计
-// 估算的"~150+",按实测数据为准)。要让白天期望点亮数落在 2–3 盏区间(取中值 2.5),
-// 基线 = 2.5 / 340.8 ≈ 0.0073,就近取 DAY_BASE = 0.0075(期望 ≈ 2.6 盏;伯努利方差下
-// 单帧实际点亮数多在 0–5 盏间波动,与"大约两三个"的目视描述相符)。
-const DAY_BASE = 0.0075;
-// 18:00→19:00 爬升 / 22:00→23:00 回落的目标峰值(需求方直接给定,不参与网格校准)。
-const NIGHT_PEAK = 0.92;
-
-/**
- * 窗灯作息调度:纯本地时钟驱动(与 phaseFromClock 推的调色相位 t 无关,不随日出日落
- * 漂移)。05:00–18:00 白天基线 DAY_BASE(见上方校准注释);18:00→19:00 用 smoothstep
- * 平滑爬升到夜间峰值 NIGHT_PEAK——随机顺序渐次点亮由各画师既有的
- * `litRand < sp.light.windowLit` 判定天然实现,不需要改画师;19:00–22:00 保持峰值;
- * 22:00→23:00 平滑回落到 0(渐次熄灭);23:00–05:00 全暗。桥灯/船灯/水面灯影走各自的
- * bridgeLampAlpha/boatLampAlpha/waterGlowAlpha,不受本调度影响。
- */
-export function windowLitSchedule(now: Date): number {
-  const hr = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
-  if (hr < 5 || hr >= 23) return 0;
-  if (hr < 18) return DAY_BASE;
-  if (hr < 19) return lerp(DAY_BASE, NIGHT_PEAK, smoothstep(18, 19, hr));
-  if (hr < 22) return NIGHT_PEAK;
-  return lerp(NIGHT_PEAK, 0, smoothstep(22, 23, hr)); // hr ∈ [22, 23)
 }

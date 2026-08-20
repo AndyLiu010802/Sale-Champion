@@ -215,6 +215,36 @@ def r(v, n=1):
     return s if s not in ('', '-0') else '0'
 
 
+def stars():
+    """140 stars scattered above the ridgeline (y < 340, so mountains occlude any that
+    would otherwise sit behind a peak). Each carries its own twinkle phase via a negative
+    animation-delay so they don't blink in lockstep (Task 7: SVG 场景设计 §5 补记).
+    Fill stays a literal placeholder — build-scene.ts rewrites it to a constant CSS var
+    (--star-color, defaulted in the fallback) rather than a numbered slot: colour never
+    needs to vary with time of day here, only opacity does (group --star + per-star twinkle)."""
+    rng = random.Random(1442)  # own seed — must not perturb the hillside/sparkle/reflection streams
+    out = []
+    for _ in range(140):
+        cx = rng.uniform(0, W)
+        cy = rng.uniform(20, 340)
+        rad = rng.uniform(0.6, 1.8)
+        delay = rng.uniform(0, 4)
+        out.append('<circle class="scene-star" cx="%s" cy="%s" r="%s" fill="#F5F3EC" '
+                   'style="animation-delay:-%ss"/>' % (r(cx), r(cy), r(rad, 2), r(delay, 2)))
+    return '\n'.join(out)
+
+
+# Sun/moon disc + halo. Coordinates stay 0 — the assembler positions the group at runtime
+# via a CSS transform (SVG geometry attributes don't accept var(), so cx/cy can't be driven
+# directly). Colour is a literal placeholder like the stars, rewritten by build-scene.ts to
+# a constant CSS var rather than a slot — see that script for why.
+CELESTIAL = '''<g id="celestial">
+<circle class="scene-celestial-glow" cx="0" cy="0" r="70" fill="#8FA8C2" opacity="0.45"/>
+<circle class="scene-celestial-body" cx="0" cy="0" r="40" fill="#FFF6E0"/>
+</g>
+'''
+
+
 def silo():
     return '\n'.join(
         '<rect x="%d" y="374" width="5" height="142" fill="#8C918E" opacity="0.48"/>' % x
@@ -362,7 +392,13 @@ def reflections(rng):
 
 def main(dest):
     rng = random.Random(20260820)
-    parts = [HEAD]
+    # #stars / #celestial go after #sky and before #sky-clouds, so clouds (and the
+    # mountains drawn later still) occlude them (Task 7 §5 补记).
+    head = HEAD.replace(
+        '<g id="sky-clouds">',
+        '<g id="stars">\n%s\n</g>\n%s<g id="sky-clouds">' % (stars(), CELESTIAL),
+    )
+    parts = [head]
 
     parts.append('<g id="hillside-houses">\n%s\n</g>\n' % hillside_houses(rng))
 

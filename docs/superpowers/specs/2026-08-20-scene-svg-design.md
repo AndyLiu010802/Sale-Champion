@@ -36,7 +36,7 @@ SVG 内联进 DOM,只留一小块 canvas 给粒子。
 
 **保留不动**:`palette.ts`(6 关键帧 + `phaseFromClock` + `sunPosition` + `nightProgress`)、`weather.ts`、`weatherCache.ts`、`/api/tv/weather`。这套引擎继续当大脑,只是换了被它驱动的画布。
 
-**搬家**:`windowLitSchedule` 从 `hobart/paint.ts` 移到 `src/lib/scene/windows.ts`,**行为与现有 10 条测试逐字不变**(白天基线、18–19 点 smoothstep 爬升、19–22 点峰值、22–23 点回落、23–05 点全黑、纯时钟)。
+**搬家**:`windowLitSchedule` 从 `hobart/paint.ts` 移到 `src/lib/scene/windowLights.ts`,**行为与现有 10 条测试逐字不变**(白天基线、18–19 点 smoothstep 爬升、19–22 点峰值、22–23 点回落、23–05 点全黑、纯时钟)。
 
 ## 4. 上色系统
 
@@ -61,9 +61,9 @@ SVG 内联进 DOM,只留一小块 canvas 给粒子。
 | `sky` | `skyTop` → `skyHor` |
 | `sky-clouds` | `haze` → `haze` 与 `skyTop` 的中点(云比雾霭亮一档) |
 | `mountains` 及其子组 | `buildingFar` → `buildingNear` |
-| `hillside-houses` | `window`,整组透明度 = `windowLit` |
+| `hillside-houses` | `window`,**逐元素**按 `windowLit` 做伯努利判定(不是整组透明度——见计划 Task 4 Step 5) |
 | `city` 楼体 | `buildingNear` → `buildingMid` |
-| `city` 窗户(源色 `#6B7476` / `#8C918E`) | `window`,亮度 = `windowLit` |
+| `city` 窗户(源色 `#6B7476`) | `window`,同上逐元素判定 |
 | `tasman-bridge` | `buildingMid` → `buildingNear` |
 | `water` | `waterDeep` → `waterLight` |
 | `water-sparkles` | `waterLight` → `skyHor` |
@@ -103,7 +103,9 @@ SVG 内联进 DOM,只留一小块 canvas 给粒子。
 
 SVG viewBox 是 `0 0 1832 859`(2.13:1),电视多为 16:9。用 `preserveAspectRatio="xMidYMid slice"` 铺满裁切,左右各裁约 8%——左端是城市、右端是桥,两头都会少一点。
 
-**这条必须截图目验后才算定**:实现的第一步就产出 16:9 截图交需求方确认,不合适再调 `preserveAspectRatio` 的锚点或平移 viewBox。
+**已定(2026-08-20,需求方看过 1920×1080 实拍后确认):居中裁切 `xMidYMid slice`,不再调整。**
+
+三档锚点的取舍(要素横向位置:城市 0–1030、筒仓 245–336、码头帆船群 30–975、塔斯曼桥 1045–1832、海上帆船 1518–1614):居中左右各切 152,损失落在左边缘几栋楼与桥最远端的桥墩上,没有标志性元素被切残;左对齐会把海上帆船切掉一半;右对齐会削掉筒仓那栋条纹楼一角。
 
 ## 7. 性能与退路
 
