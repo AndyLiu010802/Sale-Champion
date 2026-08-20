@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { eq } from 'drizzle-orm';
+import path from 'node:path';
+import { eq, sql } from 'drizzle-orm';
+import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
 import { freshDb, seedBasics } from './helpers/db';
 import type { Db } from '@/lib/db';
 import { getOrgId } from '@/lib/db/org';
@@ -150,5 +152,48 @@ describe('seed', () => {
     for (const row of saleRows) {
       expect(row.saleDate.startsWith(ym)).toBe(true);
     }
+  });
+});
+
+// 生产事故回归(2026-08-20):drizzle 的 migrator 在事务外读 __drizzle_migrations 的最新
+// created_at,所以两个并发 migrator(容器启动时 run-seed.ts 与 server.ts 各调一次 getDb())
+// 可以都判定 0004 未应用;赢锁的一方提交后,另一方重跑 0004 撞上 42701
+// 'column "team_id" of relation "agents" already exists',进程退出、生产启动链中断。
+// 这里精确复现"DDL 已在库里、但迁移未记录"这一状态,钉住 0004 必须可重复应用。
+describe('migration idempotency', () => {
+  const MIGRATIONS = { migrationsFolder: path.join(process.cwd(), 'drizzle') };
+  const TEAMS_MIGRATION_WHEN = 1787181726662; // drizzle/meta/_journal.json 的 0004 条目
+
+  it('re-applies the teams migration when its row is missing but the column already exists', async () => {
+    const db = await freshDb();
+    await db.execute(
+      sql`delete from drizzle.__drizzle_migrations where created_at = ${TEAMS_MIGRATION_WHEN}`,
+    );
+
+    // 生产上这一步抛 42701 并杀掉启动;幂等改写后必须安静通过。
+    await migratePglite(db as never, MIGRATIONS);
+
+    // 列与自引用外键都还在,且迁移这次被记录下来了。
+    const cols = await db.execute(
+      sql`select column_name from information_schema.columns
+          where table_name = 'agents' and column_name = 'team_id'`,
+    );
+    expect(cols.rows).toHaveLength(1);
+    const fks = await db.execute(
+      sql`select constraint_name from information_schema.table_constraints
+          where table_name = 'agents' and constraint_name = 'agents_team_id_agents_id_fk'`,
+    );
+    expect(fks.rows).toHaveLength(1);
+    const applied = await db.execute(
+      sql`select created_at from drizzle.__drizzle_migrations where created_at = ${TEAMS_MIGRATION_WHEN}`,
+    );
+    expect(applied.rows).toHaveLength(1);
+
+    // 外键仍然生效:队籍只能指向真实存在的行。
+    const orgId = crypto.randomUUID();
+    await db.insert(orgs).values({ id: orgId, name: 'FK Check Agency' });
+    await expect(
+      db.insert(agents).values({ id: crypto.randomUUID(), orgId, name: 'Orphan', teamId: 'nope' }),
+    ).rejects.toThrow();
   });
 });
