@@ -1,0 +1,129 @@
+# TV 背景换用 SVG 美术稿 — 设计文档
+
+- **日期**:2026-08-20
+- **状态**:已与需求方确认(三问三答:分层重新上色 / 云与水波换成可动的 / SVG 进 DOM)
+- **基线**:main @ 9775b8c 之上的增量
+
+## 1. 需求
+
+现有程序化绘制的天际线背景「不够好看」。改用需求方提供的 SVG 美术稿,同时**保留全部动态特效**:按真实日出日落变化的时间光效、飘动的云、流动的水波,以及天气驱动的雨雪。
+
+## 2. 素材
+
+`public/scene/hobart.svg`(已生成,958 元素 / 13 个可寻址分组,88 KB)。
+
+来源是需求方给的 SVG。其中**结构部分逐字保留**:山脊三层轮廓与等高线、`mountain-contours` 的柔光/阴影渐变、城市 16 座楼体与筒仓、塔斯曼桥的桥面三线与 12 组桥墩、码头棚屋/雨棚/桅杆、帆船、地平线亮带。
+
+原稿另有三组共约 570 个元素是程序生成的纹理——山坡房屋点、水面碎光条、倒影。这三组改由**带固定种子的生成脚本**复刻同样的分布(`scripts/gen-scene.py`,种子 20260820)。该脚本是一次性的美术生成器,只为留存出处,CI 不运行——`public/scene/hobart.svg` 本身才是素材。这样做不只是为了缩小文件:碎光与倒影从钉死的矩形变成可寻址的子层,才谈得上让水面真正流动。
+
+分组清单(全部是着色与动画的寻址单位):
+
+```
+sky · sky-clouds · mountains(内含 mountain-contours / mountain-contour-lines)
+hillside-houses · water · water-sparkles · city · tasman-bridge
+reflections · sailboat · foreground-ripples
+```
+
+## 3. 渲染架构
+
+SVG 内联进 DOM,只留一小块 canvas 给粒子。
+
+- `src/components/tv/SceneBackground.tsx` 取代 `SkylineBackground.tsx`。SVG 字符串经 `dangerouslySetInnerHTML` 注入——React 视之为**单个节点**,958 个元素不进 reconciliation。
+- 底层 `fixed z-0`、`pointer-events-none`,与现状一致。
+- **canvas 只画雨和雪**。300 个雨滴作为 DOM 元素太重,粒子系统本就属于 canvas;其余(云、水、星、日月)全部是 SVG 元素 + CSS 动画,走合成器,不触发重绘。
+
+**删除**:`src/lib/scene/hobart/` 全部 7 个画师文件与 `geometry.ts`(约 1400 行)。
+
+**保留不动**:`palette.ts`(6 关键帧 + `phaseFromClock` + `sunPosition` + `nightProgress`)、`weather.ts`、`weatherCache.ts`、`/api/tv/weather`。这套引擎继续当大脑,只是换了被它驱动的画布。
+
+**搬家**:`windowLitSchedule` 从 `hobart/paint.ts` 移到 `src/lib/scene/windows.ts`,**行为与现有 10 条测试逐字不变**(白天基线、18–19 点 smoothstep 爬升、19–22 点峰值、22–23 点回落、23–05 点全黑、纯时钟)。
+
+## 4. 上色系统
+
+### 4.1 构建期:色槽归并
+
+`scripts/build-scene.ts` 读 `public/scene/hobart.svg`,产出 `src/lib/scene/sceneSvg.ts`:
+
+1. 按 `<g id>` 归属每个元素(嵌套分组取最内层;`<defs>` 里的渐变按 id 前缀归属——`mountainSoft*` 归 `mountains`,其余归 `sky`/`water`)。
+2. 每组收集其全部字面色(`fill` / `stroke` / `stop-color`),按亮度聚成 2–4 个**色槽**。
+3. 把字面色改写成 `var(--sNN)`,导出槽位清单 `{ id, group, lum }[]`。
+
+产物是纯字符串 + 清单,无运行时解析开销。
+
+### 4.2 运行时:槽位取色
+
+`src/lib/scene/slots.ts` 的 `slotColors(palette, windowLit, fx)` 返回 `Record<slotId, string>`。
+
+每组有一条由 `Palette` **现有字段**导出的色带,槽位按自己记录的亮度在色带上取值——原画的明暗层次因此完整保留:
+
+| 分组 | 色带 |
+|---|---|
+| `sky` | `skyTop` → `skyHor` |
+| `sky-clouds` | `haze` → `haze` 与 `skyTop` 的中点(云比雾霭亮一档) |
+| `mountains` 及其子组 | `buildingFar` → `buildingNear` |
+| `hillside-houses` | `window`,整组透明度 = `windowLit` |
+| `city` 楼体 | `buildingNear` → `buildingMid` |
+| `city` 窗户(源色 `#6B7476` / `#8C918E`) | `window`,亮度 = `windowLit` |
+| `tasman-bridge` | `buildingMid` → `buildingNear` |
+| `water` | `waterDeep` → `waterLight` |
+| `water-sparkles` | `waterLight` → `skyHor` |
+| `reflections` | `waterDeep` → `window`(倒影是灯光落在深水上) |
+| `sailboat` | `buildingNear` → `buildingMid` |
+| `foreground-ripples` | `waterLight` |
+
+`Palette` 新增两个字段 `waterDeep` / `waterLight`,6 个关键帧各填 2 个值(共 12 个新数字)。不新造 13 组 × 6 帧的色表。
+
+### 4.3 天气对颜色的影响(沿用现有 `scenePaint` 的行为)
+
+以下三条是既有实现里已经调好的,必须在 `slotColors` 中逐条延续,并各有测试:
+
+1. **阴天压灰**:云量越高,颜色槽越去饱和。
+2. **云量抑制水面阳光反光**:高云量时水面的日照亮带减弱。
+3. **灯光不被压灰**:`window` 系槽位保持暖色,不参与去饱和。
+
+### 4.4 更新时机
+
+相位跨过 `CACHE_T_STEP`(0.015)或 `windowLit` 跨过 `WINDOW_LIT_STEP`(0.02)才重算,一次约 40 次 `style.setProperty`。沿用现有两个阈值常量。
+
+## 5. 动态层
+
+| 层 | 动法 |
+|---|---|
+| `sky-clouds` | 每朵独立 `translateX`,速度各异、循环回绕;显示朵数由天气云量决定(2–8) |
+| `water-sparkles` | 拆 4 个子层错开相位,慢速横移 + 透明度呼吸 |
+| `foreground-ripples` | 横向漂移 + 轻微纵向起伏 |
+| `reflections` | 纵向轻微伸缩(倒影随波) |
+| 星星 | `#stars` 组由 `scripts/gen-scene.py` 生成进 SVG(140 颗,只撒在山脊以上天区);夜间由 `palette.star` 控整组透明度,CSS 错开 `animation-delay` 闪烁 |
+| 日 / 月 | `#celestial` 组由构建脚本注入(圆盘 + 径向光晕两个元素),`cx`/`cy` 每帧由现有 `sunPosition(t, nightT)` 写入 |
+| 雨 / 雪 | canvas 覆盖层,沿用现有粒子上限(雨 300 / 雪 150)与 `MAX_DPR` 1.5 |
+
+庆祝弹屏出现时整体暂停(沿用现有 `paused` 语义),避免与庆祝动画抢合成器。
+
+## 6. 画幅
+
+SVG viewBox 是 `0 0 1832 859`(2.13:1),电视多为 16:9。用 `preserveAspectRatio="xMidYMid slice"` 铺满裁切,左右各裁约 8%——左端是城市、右端是桥,两头都会少一点。
+
+**这条必须截图目验后才算定**:实现的第一步就产出 16:9 截图交需求方确认,不合适再调 `preserveAspectRatio` 的锚点或平移 viewBox。
+
+## 7. 性能与退路
+
+需求方未确认电视的具体设备。收尾门禁加一条**真机验证**。
+
+若 960 个 DOM 元素叠 `backdrop-filter` 玻璃面板在目标设备上掉帧,退路是:把**静态分组**(mountains / city / tasman-bridge / sailboat)在色相跨档时预光栅化成一张离屏位图,只把动态分组(sky-clouds / water-sparkles / reflections / foreground-ripples / stars / celestial)留在 DOM。分组边界已经是现成的,退路不需要返工上色系统。
+
+## 8. 测试
+
+- **保留**:`windowLitSchedule` 的 10 条测试原样迁到新路径。
+- **改写**:`scenePaint` 的 9 条测试改为 `slotColors` 的等价断言——关键帧取色、远近明暗次序、昼夜灯光开关、跨帧插值、t 越界钳制,以及 §4.3 的三条天气行为。
+- **新增**:构建脚本的色槽归并(同组同亮度归一槽、跨组不混槽)、槽位清单与 SVG 里 `var(--sNN)` 引用一一对应、`sceneSvg.ts` 与 `public/scene/hobart.svg` 保持同步(重跑构建比对)。
+- **删除**:`geometry contract` 的 3 条(几何契约随画师一起移除);`mulberry32` 因雨雪粒子仍需保留,其确定性测试一并保留。
+- **截图目验**:6 个关键帧 × 晴/雨/雪,外加 16:9 裁切构图。
+- E2E 现有 6 条保持全绿(TV 轮播与庆祝不受背景实现影响)。
+
+## 9. 非目标
+
+视差滚动;鼠标/陀螺仪交互;昼夜以外的季节变化;真实船只/车流动画;背景可配置或多套主题;把美术稿做成可视化编辑器。
+
+## 10. 成功标准
+
+TV 背景是这张 SVG 美术稿;一天之内颜色随真实日出日落连续变化,夜里山坡亮起灯火、城市窗户点亮、月亮升起;云在飘、水面在动;天气为雨/雪时有对应粒子;16:9 裁切构图经需求方确认;真机不掉帧;vitest 与 E2E 全绿。
