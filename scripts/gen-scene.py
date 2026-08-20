@@ -194,12 +194,12 @@ SAILBOAT = '''<g id="sailboat">
 '''
 
 RIPPLES = '''<g id="foreground-ripples">
-<path d="M0 675 C190 667 350 685 520 676 C730 665 900 683 1090 675 C1330 666 1570 687 1832 678" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
-<path d="M0 706 C190 698 350 716 520 707 C730 696 900 714 1090 706 C1330 697 1570 718 1832 709" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
-<path d="M0 735 C190 727 350 745 520 736 C730 725 900 743 1090 735 C1330 726 1570 747 1832 738" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
-<path d="M0 766 C190 758 350 776 520 767 C730 756 900 774 1090 766 C1330 757 1570 778 1832 769" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
-<path d="M0 801 C190 793 350 811 520 802 C730 791 900 809 1090 801 C1330 792 1570 813 1832 804" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
-<path d="M0 832 C190 824 350 842 520 833 C730 822 900 840 1090 832 C1330 823 1570 844 1832 835" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
+<path d="M0 675 C190 667 350 685 520 676 C730 665 900 683 1090 675 C1330 666 1570 687 1832 675" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
+<path d="M0 706 C190 698 350 716 520 707 C730 696 900 714 1090 706 C1330 697 1570 718 1832 706" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
+<path d="M0 735 C190 727 350 745 520 736 C730 725 900 743 1090 735 C1330 726 1570 747 1832 735" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
+<path d="M0 766 C190 758 350 776 520 767 C730 756 900 774 1090 766 C1330 757 1570 778 1832 766" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
+<path d="M0 801 C190 793 350 811 520 802 C730 791 900 809 1090 801 C1330 792 1570 813 1832 801" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
+<path d="M0 832 C190 824 350 842 520 833 C730 822 900 840 1090 832 C1330 823 1570 844 1832 832" stroke="#405764" stroke-width="3" opacity="0.42" fill="none"/>
 <path d="M30 701C175 694 314 708 455 702" stroke="#E8DFCF" stroke-width="2.4" opacity="0.42" fill="none" stroke-linecap="round"/>
 <path d="M510 724C665 718 815 731 976 724" stroke="#E8DFCF" stroke-width="2.4" opacity="0.38" fill="none" stroke-linecap="round"/>
 <path d="M1005 681C1178 674 1364 686 1532 680" stroke="#E8DFCF" stroke-width="2.4" opacity="0.38" fill="none" stroke-linecap="round"/>
@@ -369,7 +369,9 @@ def water_sparkles(rng):
         count = 12 + int(rng.random() * 5)
         for _ in range(count):
             w = rng.uniform(28, 96) + depth * rng.uniform(0, 70)
-            x = rng.uniform(-20, W - 10)
+            # 必须整块落在画幅内:水面靠"整组左移一个画幅 + 右侧等宽副本"做无缝循环,
+            # 任何跨出 [0, W] 的矩形都会在回绕时多叠一层,接缝就露馅了(实测像素比对发现)。
+            x = rng.uniform(0, W - w)
             h = rng.choice([2, 2, 3, 4])
             op = rng.uniform(0.16, 0.54)
             out.append('<rect x="%s" y="%d" width="%s" height="%d" rx="2" fill="%s" '
