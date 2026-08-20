@@ -167,7 +167,7 @@ describe('migration idempotency', () => {
   it('re-applies the teams migration when its row is missing but the column already exists', async () => {
     const db = await freshDb();
     await db.execute(
-      sql`delete from drizzle.__drizzle_migrations where created_at = ${TEAMS_MIGRATION_WHEN}`,
+      sql`delete from drizzle.__drizzle_migrations where created_at >= ${TEAMS_MIGRATION_WHEN}`,
     );
 
     // 生产上这一步抛 42701 并杀掉启动;幂等改写后必须安静通过。
@@ -196,13 +196,56 @@ describe('migration idempotency', () => {
       db.insert(agents).values({ id: crypto.randomUUID(), orgId, name: 'Orphan', teamId: 'nope' }),
     ).rejects.toThrow();
   });
+
+  const FK_MIGRATION_WHEN = 1787188518141; // 0005_normalize_team_fk
+
+  /** agents.team_id 这一列上现存的自引用外键名(按列查,不按名查)。 */
+  async function teamIdForeignKeys(db: Db): Promise<string[]> {
+    const res = await db.execute(sql`
+      select conname from pg_constraint
+      where conrelid = 'agents'::regclass and contype = 'f'
+        and conkey = array[(select attnum from pg_attribute
+                            where attrelid = 'agents'::regclass and attname = 'team_id')]
+      order by conname`);
+    return res.rows.map((r) => (r as { conname: string }).conname);
+  }
+
+  it('collapses a hand-made foreign key on team_id down to the canonical one', async () => {
+    const db = await freshDb();
+    // 生产库上 team_id 与一条外键是手工加的,名字不是规范名 —— 0004 的
+    // DROP CONSTRAINT IF EXISTS 按名删,命中不到它,于是同列并存两条外键。
+    await db.execute(sql`alter table agents add constraint agents_team_id_by_hand
+                         foreign key (team_id) references agents(id)`);
+    expect(await teamIdForeignKeys(db)).toHaveLength(2);
+
+    await db.execute(
+      sql`delete from drizzle.__drizzle_migrations where created_at >= ${FK_MIGRATION_WHEN}`);
+    await migratePglite(db as never, MIGRATIONS);
+
+    expect(await teamIdForeignKeys(db)).toEqual(['agents_team_id_agents_id_fk']);
+
+    // 外键仍然生效:队籍只能指向真实存在的行。
+    const orgId = crypto.randomUUID();
+    await db.insert(orgs).values({ id: orgId, name: 'FK Normalise Agency' });
+    await expect(
+      db.insert(agents).values({ id: crypto.randomUUID(), orgId, name: 'Orphan', teamId: 'nope' }),
+    ).rejects.toThrow();
+  });
+
+  it('is a no-op on a database that never had the hand-made key', async () => {
+    const db = await freshDb();
+    expect(await teamIdForeignKeys(db)).toEqual(['agents_team_id_agents_id_fk']);
+    await db.execute(
+      sql`delete from drizzle.__drizzle_migrations where created_at >= ${FK_MIGRATION_WHEN}`);
+    await migratePglite(db as never, MIGRATIONS);
+    expect(await teamIdForeignKeys(db)).toEqual(['agents_team_id_agents_id_fk']);
+  });
 });
 
 // 迁移移出启动路径后的守门(生产事故 2026-08-20 的结构性修复):应用启动只连库,
 // 迁移由 pre-deploy 的 npm run db:migrate 单独跑。启动时校验 schema 不落后于代码,
 // 落后就拒绝监听——宁可红,也不要"健康检查绿、一查 team_id 就 42703"。
 describe('assertSchemaAtHead', () => {
-  const HEAD = 1787181726662; // drizzle/meta/_journal.json 里最新的 when
 
   it('passes on a freshly migrated database', async () => {
     const db = await freshDb();
@@ -211,7 +254,8 @@ describe('assertSchemaAtHead', () => {
 
   it('refuses to serve when the newest applied migration is behind the code', async () => {
     const db = await freshDb();
-    await db.execute(sql`delete from drizzle.__drizzle_migrations where created_at = ${HEAD}`);
+    await db.execute(sql`delete from drizzle.__drizzle_migrations
+                         where created_at = (select max(created_at) from drizzle.__drizzle_migrations)`);
     await expect(assertSchemaAtHead(db)).rejects.toThrow(/schema is behind the code/);
   });
 
