@@ -40,11 +40,82 @@ async function buildDb(): Promise<Db> {
   } else {
     const dir = path.join(process.cwd(), '.data', 'pglite');
     fs.mkdirSync(dir, { recursive: true });
-    client = new PGlite(dir);
+    client = await openPgliteDir(dir);
+    closePgliteOnExit(client);
   }
   const db = drizzlePglite(client, { schema }) as unknown as Db;
   await migratePglite(db as any, MIGRATIONS);
   return db;
+}
+
+/**
+ * 打开磁盘上的 PGlite;打不开就留个标记,下次启动把目录挪走重建(事故 2026-08-20:启动即 `Aborted()`)。
+ *
+ * PGlite 把 Postgres 的 PANIC 变成 WASM `abort()`,真正的原因
+ * (`PANIC: could not locate a valid checkpoint record`)留在被吞掉的 WASM stderr 里,
+ * 冒到 drizzle 那层只剩一个没有信息量的 `RuntimeError: Aborted()`,而且挂在 migrate 的
+ * 第一条语句 `CREATE SCHEMA "drizzle"` 上 —— 那条语句是无辜的,它只是第一个真正唤醒
+ * 后端的调用。想看真正的报错:`new PGlite(dir, { debug: 1 })`。
+ *
+ * 目录被写坏在开发机上几乎是必然:Windows 的 `child.kill()` 走 TerminateProcess,
+ * tsx watch 每次存盘重启子进程都是硬杀,pg_control 和 pg_wal 迟早对不上。开发库本来就是
+ * 可丢的(`.data/` 在 .gitignore 里,`npm run db:seed` 能重来),与其让整个 dev server
+ * 起不来,不如挪走重建 —— 挪走而不是删掉,万一想捞数据还在。
+ */
+async function openPgliteDir(dir: string): Promise<PGlite> {
+  const marker = `${dir}.corrupt`;
+  if (fs.existsSync(marker)) {
+    // 上一次启动确认过这个目录是坏的。此刻还没有任何句柄,是唯一能动它的时机。
+    const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+    const quarantine = `${dir}.corrupt-${stamp}`;
+    fs.renameSync(dir, quarantine);
+    fs.rmSync(marker, { force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    console.warn(
+      `[db] rebuilt the local PGlite database; the unreadable one is kept at ${path.basename(quarantine)}. `
+      + 'Run `npm run db:seed` to repopulate it.',
+    );
+    return new PGlite(dir);
+  }
+
+  const client = new PGlite(dir);
+  try {
+    await client.query('select 1'); // 后端是惰性起的,坏目录要到这里才炸
+    return client;
+  } catch (err) {
+    // WASM abort 之后连 close() 都 abort,NODEFS 的文件句柄要到进程退出才释放 —— 所以在
+    // 本进程里 rename/rm 这个目录一定是 EPERM(Windows)。只能留个标记,下次启动再收拾。
+    fs.writeFileSync(marker, `${new Date().toISOString()} ${(err as Error)?.message ?? String(err)}`);
+    throw new Error(
+      `[db] the local PGlite database at ${path.relative(process.cwd(), dir)} could not be opened — `
+      + `Postgres aborted during startup recovery, which almost always means the last dev server `
+      + `was killed without a clean shutdown. Start it again: the next boot moves this directory `
+      + `aside and rebuilds an empty one for you.\n      cause: `
+      + `${(err as Error)?.message ?? String(err)}`,
+      { cause: err },
+    );
+  }
+}
+
+/**
+ * Ctrl+C / SIGTERM 时把 PGlite 关干净,让 Postgres 落一次 shutdown checkpoint;不关就等于
+ * 下次启动都在做崩溃恢复,赌 WAL 尾部恰好完整 —— 赌输一次就是上面那个 `Aborted()`。
+ *
+ * 挡不住 tsx watch 的重启:Windows 上 `child.kill()` 是 TerminateProcess,信号根本送不到
+ * 子进程。那条路径只能靠 openPgliteDir 的重建兜底。
+ */
+function closePgliteOnExit(client: PGlite): void {
+  let closing = false;
+  const shutdown = (code: number) => {
+    if (closing) return; // 连按两次 Ctrl+C 不要在关闭中途再进来一次
+    closing = true;
+    void client.close()
+      .catch(() => { /* 关不掉就算了,退出更要紧 */ })
+      .finally(() => process.exit(code));
+  };
+  // 装了 handler 就接管了 Node 的默认行为,所以 handler 自己负责退出(128 + 信号号)。
+  process.once('SIGINT', () => shutdown(130));
+  process.once('SIGTERM', () => shutdown(143));
 }
 
 export async function getDb(): Promise<Db> {
