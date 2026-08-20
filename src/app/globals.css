@@ -105,3 +105,6 @@ body { @apply bg-bg text-ink font-body; }
 .scene-reflect { animation: scene-swell ease-in-out infinite; }
 .scene-star    { animation: scene-twinkle ease-in-out infinite; }
 #stars { opacity: var(--star, 0); }
+
+/* 雷暴闪电时给山体分组打一帧高亮(替代旧 canvas 描边远脊——几何随画师一起删了)。 */
+.scene-flash { filter: brightness(1.6); }
