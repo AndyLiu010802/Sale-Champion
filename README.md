@@ -6,14 +6,14 @@ goal progress and announcements — and the moment a sale is recorded in the adm
 console, every TV interrupts its carousel to play a full-screen celebration
 with the agent's personal anthem.
 
-Every TV page (carousel, pairing screen and the offline state) renders on an
-animated city-skyline background: the palette follows the real local time of
-day (dawn → morning → midday → golden hour → sunset → night, anchored on the
-day's actual sunrise/sunset) and layers live weather effects — rain, wind-blown
-clouds, lightning, snow, fog and clear night stars — from Open-Meteo, defaulting
-to Hobart (`WEATHER_LAT` / `WEATHER_LON` to change the location). A failing
-weather link never affects the data display: the TV falls back to a clear sky
-with fixed 06:30/19:00 sunrise/sunset.
+Every TV page (carousel, pairing screen and the offline state) renders over an
+animated SVG skyline (`public/scene/hobart.svg`, of Hobart, inlined into the DOM):
+the palette follows the real local time of day (dawn → morning → midday →
+golden hour → sunset → night, anchored on the day's actual sunrise/sunset) and
+layers live weather effects — rain, wind-blown clouds, lightning, snow and fog —
+from Open-Meteo, defaulting to Hobart (`WEATHER_LAT` / `WEATHER_LON` to change
+the location). A failing weather link never affects the data display: the TV
+falls back to a clear sky with fixed 06:30/19:00 sunrise/sunset.
 
 Built as a single Next.js (App Router) application served by a custom Node
 server that hosts a WebSocket hub on the same port. PostgreSQL via Drizzle ORM
@@ -209,18 +209,36 @@ anthems, listing photos) go to local disk in development and Cloudflare R2
 (S3 API) in production. A `CrmAdapter` interface (`src/lib/crm/adapter.ts`)
 reserves the integration point for future CRM sync (Agentbox first).
 
+The TV background (`src/components/tv/SceneBackground.tsx`) inlines
+`public/scene/hobart.svg` straight into the DOM via `dangerouslySetInnerHTML`
+(React treats it as one opaque node) and recolours it at runtime through
+~40 CSS custom properties — "colour slots" — driven by the six-keyframe
+palette in `src/lib/scene/paint.ts`. Clouds, water sparkle, ripples and
+reflections animate with CSS `transform`/`opacity` (compositor-only, no
+repaint); rain, snow, fog, lightning and the dimming vignette are drawn on a
+single `<canvas>` layer on top. The SVG's literal colours are merged into
+slots at build time by `scripts/build-scene.ts`, which writes the committed
+`src/lib/scene/sceneSvg.ts`. **After editing `public/scene/hobart.svg`, run
+`npm run build:scene` to regenerate `sceneSvg.ts` and commit the result** —
+it is not generated automatically at build or start time.
+
 ```
 server.ts               # entry point — custom Node server (Next + WebSocket, one port)
 src/
   server/bootstrap.ts   # server assembly: Next handler + /ws upgrade + WS hub wiring
   lib/                  # domain logic: db (Drizzle), auth, leaderboards, pairing,
                         # carousel reducer, settings, storage drivers, WS hub, CRM adapter
+                        # scene/ — TV background: keyframe palette, weather effects,
+                        # colour-slot mapping, build-time sceneSvg.ts output
   app/                  # Next.js App Router: / (landing), /tv, /admin, /api/*
-  components/           # tv/ (slides, celebration overlay, audio) and admin/ UI kit
+  components/           # tv/ (background, slides, celebration overlay, audio) and admin/ UI kit
   hooks/                # useTvSocket — TV WebSocket lifecycle
 tests/                  # Vitest unit + integration tests (in-memory PGlite)
 e2e/                    # Playwright end-to-end tests
 drizzle/                # generated SQL migrations
+scripts/                # build-scene.ts (regenerate src/lib/scene/sceneSvg.ts — run
+                        # after editing public/scene/hobart.svg), db migrate/seed helpers
+public/scene/           # hobart.svg — the source artwork build-scene.ts reads
 ```
 
 ## Testing
