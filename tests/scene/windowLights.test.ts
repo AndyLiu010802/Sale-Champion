@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { windowLitSchedule } from '@/lib/scene/windows';
+import { windowLitSchedule } from '@/lib/scene/windowLights';
 
 // 窗灯作息调度(2026-08-19 二轮):纯本地时钟驱动,与 phaseFromClock 的日出日落相位
-// 无关。DAY_BASE/NIGHT_PEAK 与 paint.ts 实现字面量保持同步——两边同时改,任何一边
-// 单独漂移都会在这里炸开(边界值就是校准结果本身,值得被钉死)。
+// 无关。DAY_BASE/NIGHT_PEAK 与 windowLights.ts 实现字面量保持同步——两边同时改,任何
+// 一边单独漂移都会在这里炸开(边界值就是校准结果本身,值得被钉死)。
 describe('windowLitSchedule (clock-driven window light schedule)', () => {
   const at = (h: number, m = 0, s = 0) => new Date(2026, 0, 1, h, m, s);
-  // paint.ts 顶部注释:全场景等效候选数实测 ≈340.8,目标白天期望点亮数 2–3 盏(中值
-  // 2.5),基线 = 2.5/340.8 ≈ 0.0073,就近取 0.0075。
+  // windowLights.ts 顶部注释:全场景等效候选数实测 ≈340.8,目标白天期望点亮数 2–3 盏
+  // (中值 2.5),基线 = 2.5/340.8 ≈ 0.0073,就近取 0.0075。
   const DAY_BASE = 0.0075;
   const NIGHT_PEAK = 0.92;
 

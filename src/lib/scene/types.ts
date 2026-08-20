@@ -1,6 +1,9 @@
-import type { Rgb } from '@/lib/scene/palette';
+// 剪影场景的公共类型与基础工具(hobart 设计 §2/§3 的公共部分抽出,scene-svg Task 1
+// 从 hobart/ 迁出):Rgb 色值元组、ScenePaint 调色契约、mulberry32 固定种子伪随机、
+// rgba() 格式化字符串。画师经 hobart/geometry.ts 转手复用,调色引擎(paint.ts)与
+// palette.ts 直接依赖。零外部依赖,零 DOM。
 
-export type { Rgb };
+export type Rgb = [number, number, number];
 
 // —— 分层剪影调色结果(paint.ts 产出;画师只取自己层的色槽)——
 // 进深剪影五档(远浅近深,测试钉死亮度递减):
@@ -33,7 +36,9 @@ export type ScenePaint = {
     hull: Rgb;                       // 小船剪影(船体+帆同色)
   };
   light: {
-    window: Rgb; windowLit: number;  // 窗灯发光点阵色 + 点亮比例(沿用系数)
+    window: Rgb; windowLit: number;  // 窗灯发光点阵色 + 点亮比例(沿用系数;装配器必须
+                                      // 用 windowLitSchedule(now) 覆盖此值,直接用
+                                      // scenePaint() 返回的 windowLit 会用错作息表)
     bridgeLamp: Rgb; bridgeLampAlpha: number;
     boatLamp: Rgb; boatLampAlpha: number;
     waterGlow: Rgb; waterGlowAlpha: number;   // 水面灯光竖向倒影

@@ -1,3 +1,6 @@
+// 窗灯点亮时间表(hobart 设计 §3 窗灯作息细化):纯本地时钟驱动,与 phaseFromClock 推的
+// 调色相位 t(日出日落)无关,只看现场时钟"几点钟"。零 DOM,纯函数,单测钉死。
+
 function clamp01(v: number): number {
   return Math.min(1, Math.max(0, v));
 }
@@ -13,6 +16,13 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 }
 
 // —— 窗灯作息调度(独立于 phaseFromClock 的日出日落相位;只看现场时钟"几点钟")——
+//
+// [hobart 专属校准,scene-svg 迁移后需重验] 下面的候选数审计(322/4/8/30 格)数的是
+// hobart 画师(city.ts/foreground.ts/waterfront.ts/mountain.ts)画出的窗格与灯位——
+// Task 5 删掉这四个画师后,这条审计本身就没有对象了。DAY_BASE = 0.0075 这个数字本身
+// 能留下来,是因为 SVG 版本目前按同一种"逐灯位伯努利判定"的语义接的(≈254 个灯光
+// 元素 × 0.0075 ≈ 2 盏,仍落在"两三盏"的目标区间);如果以后哪版实现改成把 windowLit
+// 当整组透明度用(而不是逐元素判定命中率),这个数字就没有意义,必须重新校准。
 //
 // 白天基线校准依据(2026-08-19 实测,mirrors 各画师 litRand < windowLit 的判定逻辑):
 //   city.ts drawWindowGrid  — 6 座 block 塔楼窗格网格(列距 0.008/行距 0.014,内边距

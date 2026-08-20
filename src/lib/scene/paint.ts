@@ -30,7 +30,7 @@ const STOPS = [0, 0.28, 0.5, 0.68, 0.84, 1];
 // 其余帧按时段氛围定稿写死;色调质感打磨(2026-08-19 二轮):MORNING 云暖白化、
 // GOLDEN 天空/云饱和度上调(更浓烈暖金)、NIGHT 天空/云整体压深(更藏蓝);
 // 只动 sky/cloud 字段,far/mid/near 剪影色与水面/灯光组不动 —— 进深五档亮度序与既有
-// 单测(hobart.test.ts)逐字钉死的 MIDDAY 值均不受影响。
+// 单测(tests/scene/paint.test.ts)逐字钉死的 MIDDAY 值均不受影响。
 // 每一帧内进深亮度严格递减:ridgeFar > ridgeNear > bridgeSil > midSil > wharfSil > fgSil
 // (已逐帧验算;线性插值保序,任意 t 都成立)。
 const FRAMES: HFrame[] = [
@@ -134,6 +134,8 @@ function grayMix(c: Rgb, amount: number): Rgb {
  * flickerEpoch = 4s 窗灯闪烁纪元(装配器注入;city 画师用它做低频闪烁)。
  * 返回的色槽已按云量/雨量去饱和;灯光组(light.* 与 water.glitter)保持暖色不压灰,
  * 波光强度按云量衰减(云遮日)。
+ * 注意:返回的 light.windowLit 是 getPalette(t) 的日出日落系数,不是真实作息;调用方
+ * 必须自己用 windowLitSchedule(now) 的结果覆盖它,直接渲染这里的 windowLit 会用错作息表。
  */
 export function scenePaint(t: number, fx: SceneEffects, flickerEpoch = 0): ScenePaint {
   const base = getPalette(t);

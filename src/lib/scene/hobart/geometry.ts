@@ -4,6 +4,14 @@
 // 全部定死在这里 —— city 画师按锚点起轮廓,water 画师按同一锚点拉倒影。
 // 剪影可辨识性全部来自这些轮廓锚点,不许自创位置。
 
+// —— 兼容 shim(scene-svg Task 1,2026-08-20)——
+// Rgb / ScenePaint / mulberry32 / rgba 这四个名字已经搬到 ../types(唯一权威副本);
+// 这里只是重新导出,好让本目录 7 个画师文件里未改动的 `from './geometry'` 继续能用。
+// 整个 hobart/ 目录会在 Task 5 随画师一起删掉,这层 shim 到时候一并消失——新代码请直接
+// `import ... from '@/lib/scene/types'`,不要再从这里绕。
+// ScenePaint 用 import + `export type { ScenePaint }`(而非纯 `export type {...} from`)
+// 是因为下面 LayerFn / WaterDynamicFn / CloudFn 三个函数签名要在本文件内部用到这个类型
+// 名字——纯 re-export-from 语法不会给当前模块留下本地绑定,直接用会编译报错。
 import type { Rgb, ScenePaint } from '../types';
 
 export type { Rgb, ScenePaint };

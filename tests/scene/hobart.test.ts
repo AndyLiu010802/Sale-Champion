@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   BAND, BOATS, BRIDGE, CITY_TOWERS, MOUNTAIN, SKY_HORIZON_Y,
-  WAREHOUSES, WATERLINE, WHARF_EDGE_Y, mulberry32,
+  WAREHOUSES, WATERLINE, WHARF_EDGE_Y,
 } from '@/lib/scene/hobart/geometry';
+import { mulberry32 } from '@/lib/scene/types';
 
 describe('geometry contract', () => {
   it('bands match the spec §2 table and are each top<bottom', () => {

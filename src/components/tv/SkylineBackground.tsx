@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { nightProgress, phaseFromClock, sunPosition } from '@/lib/scene/palette';
 import { effectsFromWeather } from '@/lib/scene/weather';
 import { scenePaint } from '@/lib/scene/paint';
-import { windowLitSchedule } from '@/lib/scene/windows';
+import { windowLitSchedule } from '@/lib/scene/windowLights';
 import {
   LAYER_SEEDS, MOUNTAIN, SKY_HORIZON_Y, mulberry32, rgba,
   type LayerFn, type ScenePaint,
