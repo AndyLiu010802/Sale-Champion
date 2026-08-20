@@ -64,18 +64,35 @@ async function buildDb(): Promise<Db> {
  */
 async function openPgliteDir(dir: string): Promise<PGlite> {
   const marker = `${dir}.corrupt`;
+  const rel = path.relative(process.cwd(), dir);
   if (fs.existsSync(marker)) {
-    // 上一次启动确认过这个目录是坏的。此刻还没有任何句柄,是唯一能动它的时机。
-    const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
-    const quarantine = `${dir}.corrupt-${stamp}`;
-    fs.renameSync(dir, quarantine);
-    fs.rmSync(marker, { force: true });
-    fs.mkdirSync(dir, { recursive: true });
-    console.warn(
-      `[db] rebuilt the local PGlite database; the unreadable one is kept at ${path.basename(quarantine)}. `
-      + 'Run `npm run db:seed` to repopulate it.',
-    );
-    return new PGlite(dir);
+    // 上一次启动确认过这个目录是坏的,趁现在挪走重建。
+    //
+    // **这一步必须允许失败。** 早先这里是裸的 renameSync,注释还写着"此刻还没有任何句柄" ——
+    // 那是错的:tsx watch 重启时上一个进程往往还活着攥着目录,Windows 上 rename 目录就是
+    // EPERM。结果是恢复逻辑自己把 dev server 彻底卡死,比它要修的问题更糟(2026-08-20 实遇)。
+    // 挪不动就退回到下面的明确报错,让人一条命令解决,绝不阻断启动。
+    try {
+      const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+      const quarantine = `${dir}.corrupt-${stamp}`;
+      fs.renameSync(dir, quarantine);
+      fs.rmSync(marker, { force: true });
+      fs.mkdirSync(dir, { recursive: true });
+      console.warn(
+        `[db] rebuilt the local PGlite database; the unreadable one is kept at ${path.basename(quarantine)}. `
+        + 'Run `npm run db:seed` to repopulate it.',
+      );
+      return new PGlite(dir);
+    } catch (moveErr) {
+      throw new Error(
+        `[db] the local PGlite database at ${rel} is unreadable and could not be moved aside `
+        + `(${(moveErr as Error)?.message ?? String(moveErr)}). On Windows this means another `
+        + `process still holds it — usually a dev server that has not exited yet.\n`
+        + `      Fix it in one command:  npm run db:reset\n`
+        + `      (that deletes ${rel} and reseeds; the local database is disposable)`,
+        { cause: moveErr },
+      );
+    }
   }
 
   const client = new PGlite(dir);
@@ -87,11 +104,12 @@ async function openPgliteDir(dir: string): Promise<PGlite> {
     // 本进程里 rename/rm 这个目录一定是 EPERM(Windows)。只能留个标记,下次启动再收拾。
     fs.writeFileSync(marker, `${new Date().toISOString()} ${(err as Error)?.message ?? String(err)}`);
     throw new Error(
-      `[db] the local PGlite database at ${path.relative(process.cwd(), dir)} could not be opened — `
-      + `Postgres aborted during startup recovery, which almost always means the last dev server `
-      + `was killed without a clean shutdown. Start it again: the next boot moves this directory `
-      + `aside and rebuilds an empty one for you.\n      cause: `
-      + `${(err as Error)?.message ?? String(err)}`,
+      `[db] the local PGlite database at ${rel} could not be opened — Postgres aborted during `
+      + `startup recovery, which almost always means the last dev server was killed without a `
+      + `clean shutdown.\n`
+      + `      Start it again and the next boot will move this directory aside for you. If that `
+      + `fails because something still holds the directory:  npm run db:reset\n`
+      + `      cause: ${(err as Error)?.message ?? String(err)}`,
       { cause: err },
     );
   }

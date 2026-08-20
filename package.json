@@ -9,6 +9,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "build:scene": "tsx scripts/build-scene.ts",
     "db:seed": "tsx src/lib/db/run-seed.ts",
+    "db:reset": "tsx scripts/reset-local-db.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"

@@ -211,6 +211,22 @@ export async function startServer(
   }, 60_000);
   server.on('close', () => clearInterval(birthdayTimer));
 
-  await new Promise<void>((resolve) => server.listen(port, resolve));
+  // listen 失败必须 reject,否则 server.ts 的 catch 接不到,Node 会把它当未捕获异常,
+  // 一个"端口被占"打出三段栈,真正有用的那一行淹没在里面(实遇 2026-08-20)。
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        reject(new Error(
+          `[boot] port ${port} is already in use — another dev server is probably still running.\n`
+          + `      Windows:  netstat -ano | findstr :${port}   then  taskkill /PID <pid> /T /F\n`
+          + `      or start this one elsewhere:  PORT=${port + 1} npm run dev`,
+          { cause: err },
+        ));
+        return;
+      }
+      reject(err);
+    });
+    server.listen(port, resolve);
+  });
   return server;
 }
