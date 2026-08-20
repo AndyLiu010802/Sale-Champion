@@ -7,7 +7,7 @@ import { carouselReducer, initCarousel, type CarouselSlide, type QueuedCelebrati
 import { expandSlides, pageSize, pageSlice } from '@/lib/pagination';
 import type { SlideKey } from '@/lib/settings';
 import type { TvStateResponse, TvWeather } from '@/lib/types';
-import SkylineBackground from '@/components/tv/SkylineBackground';
+import SceneBackground from '@/components/tv/SceneBackground';
 import PairingScreen from '@/components/tv/PairingScreen';
 import StartOverlay from '@/components/tv/StartOverlay';
 import OfflineBadge from '@/components/tv/OfflineBadge';
@@ -366,7 +366,7 @@ export default function TvApp() {
     return (
       <div className="relative h-screen w-screen overflow-hidden bg-bg">
         <LiquidGlassFilter />
-        <SkylineBackground weather={weather} paused={false} />
+        <SceneBackground weather={weather} paused={false} />
         <PairingScreen pairCode={socket.pairCode} />
       </div>
     );
@@ -375,8 +375,8 @@ export default function TvApp() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-bg">
       <LiquidGlassFilter />
-      {/* 天际线背景(设计 §2):z-0 垫底;庆祝/生日全屏播放期间暂停渲染循环。 */}
-      <SkylineBackground weather={weather} paused={carousel.mode === 'celebrate'} />
+      {/* SVG 场景背景(SVG 场景设计 §3):z-0 垫底;庆祝/生日全屏播放期间暂停渲染循环。 */}
+      <SceneBackground weather={weather} paused={carousel.mode === 'celebrate'} />
       <AnimatePresence mode="wait">
         <motion.div
           key={currentSlide ? `${currentSlide.key}-${carousel.index}` : 'idle'}
