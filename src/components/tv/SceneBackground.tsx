@@ -76,7 +76,12 @@ export default function SceneBackground({
       const body = sunPosition(t, nightProgress(now, w?.sunrise, w?.sunset));
       root.style.setProperty('--body-x', `${(body.x * 1832).toFixed(1)}px`);
       root.style.setProperty('--body-y', `${(body.y * 859 * 0.6).toFixed(1)}px`);
-      root.style.setProperty('--body-op', body.y < 1.04 ? '1' : '0');
+      // 云遮日:旧的 canvas 实现按 `1 - cloudiness * 0.5` 压暗日轮,SVG 版最初只有"在天上 /
+      // 落山"两态,结果暴雨天(云量 0.95)太阳照样刺眼——目验截图时抓到的。沿用同一条系数。
+      root.style.setProperty(
+        '--body-op',
+        body.y < 1.04 ? (1 - fx.cloudiness * 0.5).toFixed(3) : '0',
+      );
 
       const next = `${Math.round(t / CACHE_T_STEP)}|${Math.round(lit / WINDOW_LIT_STEP)}`
         + `|${Math.round(fx.cloudiness * 10)}`;
