@@ -43,10 +43,31 @@ describe('sceneSvg build output', () => {
     expect(byId.size).toBe(SCENE_SLOTS.length);
   });
 
-  it('is in sync with public/scene/hobart.svg — the element count matches', () => {
+  it('is in sync with public/scene/hobart.svg — every element survives, plus the loop copies', () => {
+    // 构建期给水面碎光与前景波纹各复制了一份右移一个画幅的副本(无缝循环的前提),所以
+    // 产物比原稿多出的元素数必须**正好**等于这两组的元素数——多一个少一个都说明复制越了界
+    // 或者漏掉了别的东西。
     const src = fs.readFileSync(path.join(process.cwd(), 'public', 'scene', 'hobart.svg'), 'utf8');
-    const count = (s: string) => (s.match(/<(rect|path|circle|line)\b/g) ?? []).length;
-    expect(count(SCENE_SVG)).toBe(count(src));
+    const count = (str: string) => (str.match(/<(rect|path|circle|line)\b/g) ?? []).length;
+    const groupBody = (str: string, id: string) => {
+      const open = str.indexOf(`<g id="${id}"`);
+      const bodyStart = str.indexOf('>', open) + 1;
+      return str.slice(bodyStart, str.indexOf('</g>', bodyStart));
+    };
+    const copied = count(groupBody(src, 'water-sparkles')) + count(groupBody(src, 'foreground-ripples'));
+    expect(copied).toBeGreaterThan(0);
+    expect(count(SCENE_SVG)).toBe(count(src) + copied);
+  });
+
+  it('closes the water loop by repeating exactly one screen width to the right', () => {
+    // 无缝的条件:平移距离 == 图案周期 == 画幅宽 1832(globals.css 的 scene-flow-left)。
+    // 副本偏移量与那条 keyframes 必须一起改,差一点就会看到接缝。
+    for (const id of ['water-sparkles', 'foreground-ripples']) {
+      const open = SCENE_SVG.indexOf(`<g id="${id}"`);
+      expect(open).toBeGreaterThan(-1);
+      const tail = SCENE_SVG.slice(open, open + 200000);
+      expect(tail).toContain('<g transform="translate(1832,0)">');
+    }
   });
 
   it('drives lamps and clouds from thresholds baked into the markup, not data- attributes (Task 7)', () => {
@@ -98,13 +119,16 @@ describe('sceneSvg build output', () => {
     expect(SCENE_SVG).toContain('fill="var(--celestial-body, ');
   });
 
-  it('splits water-sparkles into (at least) four staggered animation-delay phases', () => {
-    // 之前 water-sparkles 整组共用一个动画,全场碎光同步呼吸/漂移(§5 要求拆 4 组错开)。
+  it('staggers the sparkle breathing into four phases and leaves the drifting to the group', () => {
+    // 碎光只错开**呼吸**相位(§5 要求拆 4 组)。横向流动必须是整组的:早先每个矩形各自
+    // 平移再弹回、4 组的弹回时刻还不同,看起来是一片乱抖而不是水流(需求方目验指出)。
     const delays = new Set(
-      Array.from(SCENE_SVG.matchAll(/class="scene-sparkle" style="animation-delay:(-[\d.]+s,-[\d.]+s)"/g),
+      Array.from(SCENE_SVG.matchAll(/class="scene-sparkle" style="animation-delay:(-[\d.]+s)"/g),
         (m) => m[1]),
     );
-    expect(delays.size).toBeGreaterThanOrEqual(4);
+    expect(delays.size).toBe(4);
+    // 单个碎光不许再自带第二条(横移)动画 —— 有逗号就是两条。
+    expect(SCENE_SVG).not.toMatch(/class="scene-sparkle" style="animation-delay:-[\d.]+s,/);
   });
 
   it('lights an exact number of lamps at each schedule level, not a seed lottery', () => {

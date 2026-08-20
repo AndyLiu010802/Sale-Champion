@@ -59,6 +59,21 @@ function shuffledRanks(n: number, seed: number): number[] {
   return a;
 }
 
+/**
+ * 把某个分组的内容在右侧再复制一份(整体 translate 一个画幅宽),使它在 x 方向以画幅为周期。
+ * 配合 globals.css 里"整组左移正好一个画幅"的动画,循环点前后画面完全重合,没有接缝。
+ */
+function duplicateForLoop(svg: string, groupId: string): string {
+  const open = svg.indexOf(`<g id="${groupId}"`);
+  if (open < 0) throw new Error(`duplicateForLoop: 找不到分组 ${groupId}`);
+  const bodyStart = svg.indexOf('>', open) + 1;
+  const close = svg.indexOf('</g>', bodyStart);
+  if (close < 0) throw new Error(`duplicateForLoop: 分组 ${groupId} 没有闭合`);
+  const body = svg.slice(bodyStart, close);
+  const copy = `<g transform="translate(1832,0)">${body}</g>`;
+  return svg.slice(0, close) + copy + svg.slice(close);
+}
+
 function build(): { svg: string; slots: Slot[] } {
   const src = fs.readFileSync(SRC, 'utf8');
   const slots: Slot[] = [];
@@ -125,7 +140,6 @@ function build(): { svg: string; slots: Slot[] } {
     // 动态分组:开组标签加类名;云/碎光是逐元素处理,所以在组内按行处理。
     if (gm) {
       const cls: Record<string, string> = {  // eslint-disable-line
-        'foreground-ripples': 'scene-ripple" style="animation-duration:180s',
         'reflections': 'scene-reflect" style="animation-duration:9s',
       };
       const c = cls[gm[1]];
@@ -139,11 +153,11 @@ function build(): { svg: string; slots: Slot[] } {
     } else if (group === 'water-sparkles' && line.trimStart().startsWith('<rect')) {
       // 碎光拆 4 组错开呼吸相位与漂移起点,不再整片同步呼吸(按遇到顺序轮询分桶,
       // 构建产物因此稳定可重现;设计 §5 "拆 4 个子层错开相位")。
-      const bucket = sparkleIdx % 4;
-      const breatheDelay = (bucket * 7) / 4;
-      const driftDelay = (bucket * 220) / 4;
+      // 只错开**呼吸**相位;横向流动由整组平移负责(globals.css #water-sparkles),
+      // 早先让每个矩形各自漂移再弹回,看起来是乱抖而不是水流。
+      const breatheDelay = ((sparkleIdx % 4) * 7) / 4;
       rewritten = rewritten.replace('<rect ',
-        `<rect class="scene-sparkle" style="animation-delay:-${breatheDelay}s,-${driftDelay}s" `);
+        `<rect class="scene-sparkle" style="animation-delay:-${breatheDelay}s" `);
       sparkleIdx += 1;
     } else if (group === 'sky-clouds' && line.trimStart().startsWith('<path')) {
       // 每朵云单独包一层:速度 120/165/210/255s 循环,负延迟错开起始位置。显示朵数阈值
@@ -158,7 +172,11 @@ function build(): { svg: string; slots: Slot[] } {
     return rewritten;
   }).join('\n');
 
-  const svg = out.replace(
+  // 无缝循环的前提:图案在 x 方向以画幅宽度为周期。给这两组在右侧各复制一份等宽副本,
+  // 整组左移 1832 走完一个周期时,副本正好落到原件的位置,画面逐像素重合。
+  const seamless = duplicateForLoop(duplicateForLoop(out, 'water-sparkles'), 'foreground-ripples');
+
+  const svg = seamless.replace(
     '<svg xmlns="http://www.w3.org/2000/svg" width="1832" height="859" viewBox="0 0 1832 859" fill="none">',
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1832 859" fill="none" '
     + 'preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;display:block">');

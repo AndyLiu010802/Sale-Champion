@@ -89,7 +89,11 @@ body { @apply bg-bg text-ink font-body; }
 
 /* —— SVG 场景动态层(SVG 场景设计 §5)——
    全部只改 transform/opacity,不触发重绘;paused 时整棵树 animation-play-state: paused。 */
-@keyframes scene-drift { from { transform: translateX(0); } to { transform: translateX(2196px); } }
+/* 水面整体向左匀速流动。平移距离正好等于画幅宽度,而构建期在右侧复制了一份等宽副本,
+   所以一个周期走完时画面与起点逐像素重合,循环点看不出接缝。 */
+@keyframes scene-flow-left { from { transform: translateX(0); } to { transform: translateX(-1832px); } }
+/* 云:从画幅右外侧穿到左外侧,回绕发生在屏幕之外,同样看不见接缝。 */
+@keyframes scene-cross-left { from { transform: translateX(1832px); } to { transform: translateX(-1832px); } }
 @keyframes scene-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 @keyframes scene-swell { 0%, 100% { transform: translateY(0) scaleY(1); }
                           50% { transform: translateY(2px) scaleY(1.06); } }
@@ -97,12 +101,15 @@ body { @apply bg-bg text-ink font-body; }
 
 .scene-root.is-paused * { animation-play-state: paused !important; }
 
-/* 云:每朵一个包裹 <g>,速度由内联 animation-duration 给,循环横穿两倍画幅后回绕 */
-.scene-cloud { animation: scene-drift linear infinite; }
-/* 水面碎光:构建期按遇到顺序分 4 组,组内共享呼吸/漂移周期,组间靠 animation-delay
-   错开相位与横移起点(内联在每个元素上)——不再整片同步呼吸(Task 7)。 */
-.scene-sparkle { animation: scene-breathe 7s ease-in-out infinite, scene-drift 220s linear infinite; }
-.scene-ripple  { animation: scene-drift linear infinite; }
+/* 云:每朵一个包裹 <g>,速度由内联 animation-duration 给,自右向左穿过画面。 */
+.scene-cloud { animation: scene-cross-left linear infinite; }
+/* 水面碎光只负责"呼吸":构建期分 4 组,用 animation-delay 错开相位,让不同区块在不同
+   时刻反光。**横向流动不在这里做** —— 早先每个矩形各自平移再弹回,4 组的弹回时刻还不同,
+   看起来是一片乱抖而不是水流。流动改由下面的整组平移负责。 */
+.scene-sparkle { animation: scene-breathe 7s ease-in-out infinite; }
+/* 整组左流:碎光与波纹各自匀速,速度不同才有层次。 */
+#water-sparkles     { animation: scene-flow-left 220s linear infinite; }
+#foreground-ripples { animation: scene-flow-left 180s linear infinite; }
 .scene-reflect { animation: scene-swell ease-in-out infinite; }
 .scene-star    { animation: scene-twinkle 4s ease-in-out infinite; }
 #stars { opacity: var(--star, 0); }

@@ -288,13 +288,20 @@ def sheds():
     return '\n'.join(out)
 
 
+# 码头帆船整体下沉量。原稿里船舱(y 514-528)与码头甲板横条(y 516-528)几乎完全重叠,
+# 渲染出来像停在甲板上而不是浮在水里(需求方 2026-08-20 目验指出)。甲板底线在 528,
+# 下沉 16 让船舱落到 530 以下、船体进入水面,同时仍压在栈桥柱前面(ROOFS 画在 PILINGS 之后)。
+BOAT_SINK = 16
+
+
 def roofs():
     specs = [(30, 530, 120, 15, 44, 518, 92), (122, 538, 90, 12, 136, 526, 62),
              (250, 530, 104, 14, 264, 518, 76), (393, 526, 90, 15, 407, 514, 62),
              (590, 529, 70, 11, 604, 517, 42), (706, 528, 72, 12, 720, 516, 44),
              (811, 527, 64, 10, 825, 515, 36), (913, 528, 62, 9, 927, 516, 34)]
     out = []
-    for x, y, w, h, bx, by, bw in specs:
+    for x, y0, w, h, bx, by0, bw in specs:
+        y, by = y0 + BOAT_SINK, by0 + BOAT_SINK
         out.append('<path d="M%d %d H%d L%d %d H%dZ" fill="#E8DFCF" opacity="0.94"/>'
                    % (x, y, x + w, x + w - 14, y + h, x + 12))
         out.append('<rect x="%d" y="%d" width="%d" height="10" rx="1" fill="#40515A" opacity="0.9"/>'
@@ -307,7 +314,9 @@ def masts():
              (398, 408, 529), (482, 430, 533), (690, 441, 531), (752, 437, 528),
              (836, 428, 528), (912, 443, 530)]
     out = []
-    for x, top, bot in specs:
+    for x, top0, bot0 in specs:
+        # 桅杆跟着船一起下沉,否则会脱离船体悬在半空。
+        top, bot = top0 + BOAT_SINK, bot0 + BOAT_SINK
         out.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#AEB4B0" stroke-width="1.5" '
                    'opacity="0.8" stroke-linecap="round"/>' % (x, top, x, bot))
         out.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#AEB4B0" stroke-width="1" '
