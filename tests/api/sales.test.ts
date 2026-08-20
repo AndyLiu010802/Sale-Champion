@@ -59,7 +59,7 @@ describe('POST /api/sales', () => {
     // Alice has no anthem of her own — server must fall back to settings.defaultAnthemUrl
     expect(c.anthemUrl).toBe(DEFAULT_SETTINGS.defaultAnthemUrl);
     expect(c.anthemUrl).toBe('builtin:victory');
-    expect(c.durationSec).toBe(18);
+    expect(c.durationSec).toBe(DEFAULT_SETTINGS.celebrationDurationSec);
     expect(events[1]).toEqual({ type: 'data.updated', domain: 'sales' });
   });
 
@@ -168,7 +168,7 @@ describe('POST /api/sales/[id]/replay', () => {
     if (c.kind !== 'sale') throw new Error('expected a sale celebration');
     expect(c.saleId).toBe(created.data.id);
     expect(c.agentName).toBe('Alice Ng');
-    expect(c.durationSec).toBe(18);
+    expect(c.durationSec).toBe(DEFAULT_SETTINGS.celebrationDurationSec);
   });
 
   it('returns 404 when the sale does not exist', async () => {
@@ -343,7 +343,7 @@ describe('buildBirthdayPayload', () => {
       agentId: 'agent-1',
       name: 'Alice Ng',
       photoUrl: '/files/alice.jpg',
-      durationSec: 18,
+      durationSec: Math.max(13, DEFAULT_SETTINGS.celebrationDurationSec),
     });
   });
 

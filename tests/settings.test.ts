@@ -23,8 +23,12 @@ describe('SLIDE_KEYS / DEFAULT_SETTINGS', () => {
     expect(SLIDE_KEYS[1]).toBe('scorecard_ytd');
     expect(SLIDE_KEYS).not.toContain('listings');
     expect(DEFAULT_SETTINGS.slides.map((s) => s.key)).toEqual([...SLIDE_KEYS]);
-    expect(DEFAULT_SETTINGS.slides[0]).toEqual({ key: 'scorecard', enabled: true, durationSec: 20 });
-    expect(DEFAULT_SETTINGS.slides[1]).toEqual({ key: 'scorecard_ytd', enabled: true, durationSec: 20 });
+    expect(DEFAULT_SETTINGS.slides[0]).toEqual({ key: 'scorecard', enabled: true, durationSec: 5 });
+    expect(DEFAULT_SETTINGS.slides[1]).toEqual({ key: 'scorecard_ytd', enabled: true, durationSec: 5 });
+    // 全 7 页统一 5s、庆祝 12s、音量 0(用户 2026-08-20 指定的现网数值)
+    expect(DEFAULT_SETTINGS.slides.every((s) => s.durationSec === 5)).toBe(true);
+    expect(DEFAULT_SETTINGS.celebrationDurationSec).toBe(12);
+    expect(DEFAULT_SETTINGS.volume).toBe(0);
   });
 });
 

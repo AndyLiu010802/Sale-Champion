@@ -10,17 +10,17 @@ import {
 // 同步性由 tests/db.test.ts 的 toEqual(DEFAULT_SETTINGS) 断言钉死(scorecard Task 3)。
 const DEFAULT_SETTINGS_DATA = {
   slides: [
-    { key: 'scorecard', enabled: true, durationSec: 20 },
-    { key: 'scorecard_ytd', enabled: true, durationSec: 20 },
-    { key: 'leaderboard_sales_count', enabled: true, durationSec: 15 },
-    { key: 'leaderboard_gci', enabled: true, durationSec: 15 },
-    { key: 'leaderboard_listings', enabled: true, durationSec: 15 },
-    { key: 'goal_progress', enabled: true, durationSec: 10 },
-    { key: 'announcements', enabled: true, durationSec: 10 },
+    { key: 'scorecard', enabled: true, durationSec: 5 },
+    { key: 'scorecard_ytd', enabled: true, durationSec: 5 },
+    { key: 'leaderboard_sales_count', enabled: true, durationSec: 5 },
+    { key: 'leaderboard_gci', enabled: true, durationSec: 5 },
+    { key: 'leaderboard_listings', enabled: true, durationSec: 5 },
+    { key: 'goal_progress', enabled: true, durationSec: 5 },
+    { key: 'announcements', enabled: true, durationSec: 5 },
   ],
   leaderboardPeriod: 'month',
-  celebrationDurationSec: 18,
-  volume: 0.8,
+  celebrationDurationSec: 12,
+  volume: 0,
   defaultAnthemUrl: 'builtin:victory',
 };
 

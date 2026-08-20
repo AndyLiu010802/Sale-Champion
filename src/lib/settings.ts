@@ -19,8 +19,8 @@ export type SlideConfig = { key: SlideKey; enabled: boolean; durationSec: number
 export type SettingsData = {
   slides: SlideConfig[];             // 有序
   leaderboardPeriod: Period;         // 默认 'month'
-  celebrationDurationSec: number;    // 10–30, 默认 18
-  volume: number;                    // 0–1, 默认 0.8
+  celebrationDurationSec: number;    // 10–30, 默认 12
+  volume: number;                    // 0–1, 默认 0(静音;由管理员在设置页调高)
   defaultAnthemUrl: string | null;   // 默认 'builtin:victory'
 };
 
@@ -44,17 +44,17 @@ export const settingsSchema: z.ZodType<SettingsData> = z.object({
 
 export const DEFAULT_SETTINGS: SettingsData = {
   slides: [
-    { key: 'scorecard', enabled: true, durationSec: 20 },
-    { key: 'scorecard_ytd', enabled: true, durationSec: 20 },
-    { key: 'leaderboard_sales_count', enabled: true, durationSec: 15 },
-    { key: 'leaderboard_gci', enabled: true, durationSec: 15 },
-    { key: 'leaderboard_listings', enabled: true, durationSec: 15 },
-    { key: 'goal_progress', enabled: true, durationSec: 10 },
-    { key: 'announcements', enabled: true, durationSec: 10 },
+    { key: 'scorecard', enabled: true, durationSec: 5 },
+    { key: 'scorecard_ytd', enabled: true, durationSec: 5 },
+    { key: 'leaderboard_sales_count', enabled: true, durationSec: 5 },
+    { key: 'leaderboard_gci', enabled: true, durationSec: 5 },
+    { key: 'leaderboard_listings', enabled: true, durationSec: 5 },
+    { key: 'goal_progress', enabled: true, durationSec: 5 },
+    { key: 'announcements', enabled: true, durationSec: 5 },
   ],
   leaderboardPeriod: 'month',
-  celebrationDurationSec: 18,
-  volume: 0.8,
+  celebrationDurationSec: 12,
+  volume: 0,
   defaultAnthemUrl: 'builtin:victory',
 };
 

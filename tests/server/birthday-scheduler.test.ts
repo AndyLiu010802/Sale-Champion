@@ -4,6 +4,7 @@ import { freshDb, seedBasics, type Basics } from '../helpers/db';
 import type { Db } from '@/lib/db';
 import { agents, orgs } from '@/lib/db/schema';
 import { getHub } from '@/lib/ws/hub';
+import { DEFAULT_SETTINGS } from '@/lib/settings';
 import type { ServerEvent } from '@/lib/ws/protocol';
 import { runBirthdayTick } from '@/server/bootstrap';
 
@@ -53,7 +54,7 @@ describe('runBirthdayTick', () => {
           agentId: bobId,
           name: 'Bob Birthday',
           photoUrl: null,
-          durationSec: 18,
+          durationSec: Math.max(13, DEFAULT_SETTINGS.celebrationDurationSec),
         },
       },
     ]);

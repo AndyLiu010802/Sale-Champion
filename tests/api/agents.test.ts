@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { freshDb, seedBasics, type Basics } from '../helpers/db';
 import { jsonRequest, authedRequest } from '../helpers/request';
 import { getHub } from '@/lib/ws/hub';
+import { DEFAULT_SETTINGS } from '@/lib/settings';
 import type { ServerEvent } from '@/lib/ws/protocol';
 import type { Db } from '@/lib/db';
 import { agents, appraisals, listings, orgs, sales } from '@/lib/db/schema';
@@ -426,7 +427,7 @@ describe('POST /api/agents/[id]/birthday-broadcast', () => {
           agentId: basics.agentId,
           name: 'Alice Ng',
           photoUrl: null,
-          durationSec: 18,
+          durationSec: Math.max(13, DEFAULT_SETTINGS.celebrationDurationSec),
         },
       },
     ]);
@@ -454,7 +455,7 @@ describe('POST /api/agents/[id]/birthday-broadcast', () => {
     expect(first.celebration.agentId).toBe(staff.id);
     expect(first.celebration.name).toBe('Sam Staff');
     expect(first.celebration.photoUrl).toBe('https://example.com/sam.jpg');
-    expect(first.celebration.durationSec).toBe(18);
+    expect(first.celebration.durationSec).toBe(Math.max(13, DEFAULT_SETTINGS.celebrationDurationSec));
   });
 
   it('returns 404 for an unknown id', async () => {
