@@ -6,11 +6,14 @@ import { goals } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/session';
 import { getHub } from '@/lib/ws/hub';
 import { METRICS } from '@/lib/types';
+import { GOAL_COLORS } from '@/lib/goals/palette';
 
 const createSchema = z.object({
   metric: z.enum(METRICS),
   targetValue: z.number().int().positive(),
   period: z.enum(['month', 'quarter']),
+  // 可空 = 跟随口径默认(palette.DEFAULT_GOAL_COLOR)。只收名册里的名字,不收色值。
+  color: z.enum(GOAL_COLORS).nullable().optional(),
 });
 
 export async function GET(req: Request) {
@@ -52,6 +55,7 @@ export async function POST(req: Request) {
       metric: parsed.data.metric,
       targetValue: parsed.data.targetValue,
       period: parsed.data.period,
+      color: parsed.data.color ?? null,
     })
     .returning();
   getHub().broadcast({ type: 'data.updated', domain: 'goals' });

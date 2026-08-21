@@ -51,12 +51,16 @@ body { @apply bg-bg text-ink font-body; }
 .value-3d {
   display: inline-block;
   font-weight: 900;
-  background: linear-gradient(90deg, #5cf7de 0%, #6fa8ff 55%, #b06cff 100%);
+  /* 目标环要按目标换色(src/lib/goals/palette.ts),所以三段色与外发光走变量。
+     默认值就是原来的品牌渐变 —— 不传 gradient 的调用点(榜单/记分卡)观感逐字不变。 */
+  background: linear-gradient(90deg, var(--gv-a, #5cf7de) 0%, var(--gv-b, #6fa8ff) 55%,
+    var(--gv-c, #b06cff) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 2px 1px rgba(8, 21, 33, 0.55)) drop-shadow(0 0 10px rgba(92, 247, 222, 0.5));
+  filter: drop-shadow(0 2px 1px rgba(8, 21, 33, 0.55))
+    drop-shadow(0 0 10px var(--gv-glow, rgba(92, 247, 222, 0.5)));
 }
 
 /* —— 黄金荣耀标题(视觉设计 §4)——

@@ -227,6 +227,47 @@ describe('goals', () => {
     expect(events).toEqual([{ type: 'data.updated', domain: 'goals' }]);
   });
 
+  it('stores a ring colour, and stores null when none is given', async () => {
+    const withColour = await (await createGoal(await authedRequest('/api/goals', {
+      method: 'POST',
+      body: { metric: 'listings', targetValue: 20, period: 'month', color: 'ice' },
+    }))).json();
+    expect(withColour.data.color).toBe('ice');
+
+    // 不传 color = 跟随口径默认。库里存 null 而不是把默认色抄进去 —— 抄进去的话,
+    // 以后调色板换了默认色,老目标会钉死在旧色上。
+    const without = await (await createGoal(await authedRequest('/api/goals', {
+      method: 'POST',
+      body: { metric: 'listings', targetValue: 30, period: 'month' },
+    }))).json();
+    expect(without.data.color).toBeNull();
+  });
+
+  it('rejects a colour that is not in the palette with 400', async () => {
+    for (const color of ['gold', 'rebeccapurple', '#FF0000']) {
+      const res = await createGoal(await authedRequest('/api/goals', {
+        method: 'POST',
+        body: { metric: 'gci', targetValue: 100, period: 'month', color },
+      }));
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('PATCH color: null puts a goal back on the metric default', async () => {
+    const created = await (await createGoal(await authedRequest('/api/goals', {
+      method: 'POST',
+      body: { metric: 'gci', targetValue: 100, period: 'month', color: 'magenta' },
+    }))).json();
+
+    const reset = await patchGoal(
+      await authedRequest(`/api/goals/${created.data.id}`, { method: 'PATCH', body: { color: null } }),
+      { params: Promise.resolve({ id: created.data.id }) },
+    );
+    expect(reset.status).toBe(200);
+    // null 必须真的落库:如果 zod 把 null 当成"字段缺席"吞掉,这里会读回 magenta。
+    expect((await reset.json()).data.color).toBeNull();
+  });
+
   it('returns 404 for an unknown goal id', async () => {
     const res = await deleteGoal(
       await authedRequest('/api/goals/ghost', { method: 'DELETE' }),

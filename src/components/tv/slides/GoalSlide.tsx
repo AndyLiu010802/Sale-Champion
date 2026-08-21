@@ -5,6 +5,7 @@ import type { GoalProgress } from '@/lib/types';
 import { formatValue } from '@/lib/format';
 import GradientValue from '@/components/tv/GradientValue';
 import ProgressRing from '@/components/tv/ProgressRing';
+import { GOAL_GRADIENTS } from '@/lib/goals/palette';
 
 const METRIC_LABELS: Record<GoalProgress['metric'], string> = {
   sales_count: 'SALES',
@@ -65,13 +66,13 @@ export default function GoalSlide({ goals }: { goals: GoalProgress[] }) {
                     </span>
                   </h2>
                   <div className={`relative ${compact ? 'mt-3' : 'mt-6'}`} style={{ width: size, height: size }}>
-                    <ProgressRing pct={pct} size={size} reached={reached} />
+                    <ProgressRing pct={pct} size={size} reached={reached} color={goal.color} />
                     <div className="absolute inset-0 flex items-center justify-center">
                       <span className={`font-display ${pctText}`}>
                         {reached ? (
                           <span className="gold-title">{pct}%</span>
                         ) : (
-                          <GradientValue value={`${pct}%`} />
+                          <GradientValue value={`${pct}%`} gradient={GOAL_GRADIENTS[goal.color]} />
                         )}
                       </span>
                     </div>

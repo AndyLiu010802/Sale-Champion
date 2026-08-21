@@ -7,6 +7,7 @@ import { computeScorecard } from '@/lib/domain/scorecard';
 import { fyLabel, fyToDateRange, periodLabel, periodRange } from '@/lib/domain/periods';
 import { getSettings } from '@/lib/settings';
 import type { GoalProgress, Metric, TvAnnouncement, TvStateResponse } from '@/lib/types';
+import { goalColor } from '@/lib/goals/palette';
 
 export async function GET(req: Request): Promise<Response> {
   const token = req.headers.get('x-device-token');
@@ -79,7 +80,8 @@ export async function GET(req: Request): Promise<Response> {
     const percent = g.targetValue > 0
       ? Math.min(100, Math.round((currentValue / g.targetValue) * 100))
       : 100;
-    return { id: g.id, metric, period, targetValue: g.targetValue, currentValue, percent };
+    return { id: g.id, metric, period, targetValue: g.targetValue, currentValue, percent,
+      color: goalColor(metric, g.color) };
   });
 
   const annRows = await db.select().from(announcements)

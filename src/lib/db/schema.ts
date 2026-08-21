@@ -103,6 +103,9 @@ export const goals = pgTable('goals', {
   metric: text('metric').notNull(), // 'sales_count' | 'gci' | 'listings'
   targetValue: bigint('target_value', { mode: 'number' }).notNull(), // gci 目标为 cents,其余为个数
   period: text('period').notNull(), // 'month' | 'quarter'
+  // 目标环配色,可空 = 跟随口径默认(src/lib/goals/palette.ts)。存名字不存色值:
+  // 调色板改了颜色,已有目标跟着变;认不出来的名字回落默认,不会渲染出空渐变。
+  color: text('color'),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -43,6 +43,13 @@
       "when": 1787188518141,
       "tag": "0005_normalize_team_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787270017089,
+      "tag": "0006_goal_color",
+      "breakpoints": true
     }
   ]
 }

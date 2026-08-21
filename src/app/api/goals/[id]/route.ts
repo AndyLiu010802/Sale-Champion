@@ -6,12 +6,16 @@ import { goals } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/session';
 import { getHub } from '@/lib/ws/hub';
 import { METRICS } from '@/lib/types';
+import { GOAL_COLORS } from '@/lib/goals/palette';
 
 const patchSchema = z.object({
   metric: z.enum(METRICS).optional(),
   targetValue: z.number().int().positive().optional(),
   period: z.enum(['month', 'quarter']).optional(),
   active: z.boolean().optional(),
+  // null 是有意义的取值(改回"跟随默认"),所以 nullable 与 optional 都要 —— 字段缺席
+  // 才是"不改",这与 diff-only PATCH 的约定一致。
+  color: z.enum(GOAL_COLORS).nullable().optional(),
 });
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {

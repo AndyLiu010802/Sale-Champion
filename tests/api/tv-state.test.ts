@@ -4,6 +4,7 @@ import { freshDb, seedBasics, type Basics } from '../helpers/db';
 import { jsonRequest, authedRequest } from '../helpers/request';
 import type { Db } from '@/lib/db';
 import { agents, announcements, appraisals, goals, listings, sales, screens } from '@/lib/db/schema';
+import { DEFAULT_GOAL_COLOR } from '@/lib/goals/palette';
 import { generateDeviceToken, hashToken } from '@/lib/domain/pairing';
 import { fyLabel, fyToDateRange, periodLabel } from '@/lib/domain/periods';
 import { GET as tvStateGet } from '@/app/api/tv/state/route';
@@ -178,6 +179,24 @@ describe('GET /api/tv/state', () => {
     const { data } = await res.json();
     expect(data.goals[0].currentValue).toBe(3);
     expect(data.goals[0].percent).toBe(100); // 150% capped
+  });
+
+  it('resolves each goal colour server-side, defaulting by metric', async () => {
+    // TV 端拿到的必须是解析好的色名:GoalSlide 直接 GOAL_GRADIENTS[goal.color],
+    // 让它自己回落默认等于把默认表复制到第二处。
+    await db.insert(goals).values([
+      { id: crypto.randomUUID(), orgId: basics.orgId, metric: 'gci', targetValue: 100000, period: 'month', active: true, color: 'ice' },
+      { id: crypto.randomUUID(), orgId: basics.orgId, metric: 'listings', targetValue: 5, period: 'month', active: true, color: null },
+      { id: crypto.randomUUID(), orgId: basics.orgId, metric: 'sales_count', targetValue: 5, period: 'month', active: true, color: 'retired-name' },
+    ]);
+
+    const res = await tvStateGet(stateRequest(token));
+    const { data } = await res.json();
+    const byMetric = Object.fromEntries(
+      (data.goals as { metric: string; color: string }[]).map((g) => [g.metric, g.color]));
+    expect(byMetric.gci).toBe('ice');                                  // 选了就用选的
+    expect(byMetric.listings).toBe(DEFAULT_GOAL_COLOR.listings);       // 空 → 口径默认
+    expect(byMetric.sales_count).toBe(DEFAULT_GOAL_COLOR.sales_count); // 认不出来 → 也回落
   });
 
   it('excludes staff from every leaderboard', async () => {

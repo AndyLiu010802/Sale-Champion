@@ -1,3 +1,4 @@
+import type { GoalColor } from '@/lib/goals/palette';
 import type { ScorecardData } from './domain/scorecard';
 import type { SettingsData } from './settings';
 
@@ -22,6 +23,7 @@ export type GoalProgress = {
   targetValue: number;
   currentValue: number;
   percent: number; // 0-100, rounded, capped at 100
+  color: GoalColor; // 服务端已按 goalColor() 解析过默认,TV 端直接用
 };
 
 export type TvAnnouncement = { id: string; title: string; body: string | null; imageUrl: string | null };
